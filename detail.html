@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>산불 확산 예측 상세 정보</title>
+  <link rel="stylesheet" href="detail.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_APP_KEY"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #fff;
+      color: #333;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+
+    .top-bar .logo {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+
+    .top-bar h2 {
+      font-size: 1.2rem;
+      margin-left: 1rem;
+      flex-grow: 1;
+    }
+
+    .main-container {
+      display: flex;
+      flex-direction: row;
+      height: calc(100vh - 70px);
+    }
+
+    .left-panel {
+      width: 50%;
+      padding: 1.5rem;
+      border-right: 1px solid #eee;
+      overflow-y: auto;
+    }
+
+    .right-panel {
+      width: 50%;
+      padding: 1.5rem;
+    }
+
+    .region-select select,
+    .region-select button {
+      padding: 0.5rem 0.8rem;
+      margin-right: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 0.95rem;
+    }
+
+    .region-select .reset {
+      background-color: #f0f0f0;
+    }
+
+    .map-area {
+      width: 100%;
+      height: 400px;
+      margin-top: 1rem;
+    }
+
+    .chart-tabs {
+      display: flex;
+      margin-bottom: 1rem;
+      gap: 1rem;
+    }
+
+    .chart-nav {
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 1rem;
+}
+
+.chart-nav ul {
+  list-style: none;
+  display: flex;
+  padding-left: 0;
+}
+
+.nav-item {
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-bottom: none;
+  background-color: #f9f9f9;
+  font-weight: 500;
+}
+
+.nav-item + .nav-item {
+  margin-left: 0.5rem;
+}
+
+.nav-item.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+    .tab {
+      padding: 0.5rem 1rem;
+      border: 1px solid #ccc;
+      background-color: #f4f4f4;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background-color: #007BFF;
+      color: white;
+      border-color: #007BFF;
+    }
+
+    .chart-canvas {
+      width: 100%;
+      max-height: 400px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <div class="logo">SEED</div>
+    <h2>산불 확산 예측 상세 정보</h2>
+  </header>
+
+  <main class="main-container">
+    <section class="left-panel">
+      <div class="region-select">
+        <label>지역 </label>
+        <select>
+          <option>군</option>
+        </select>
+        <select>
+          <option>구</option>
+        </select>
+        <button>검색</button>
+        <button class="reset">초기화</button>
+      </div>
+
+      <h3>산불 확산 속도 및 범위</h3>
+      <div id="map" class="map-area"></div>
+    </section>
+
+    <section class="right-panel">
+      <nav class="chart-nav">
+  <ul>
+    <li class="nav-item active" onclick="showChart('distance')">시간별 거리 변화</li>
+    <li class="nav-item" onclick="showChart('speed')">속도 등급별 분포</li>
+  </ul>
+</nav>
+      <canvas id="distanceChart" class="chart-canvas"></canvas>
+      <canvas id="speedChart" class="chart-canvas hidden"></canvas>
+    </section>
+  </main>
+
+  <script src="detail.js"></script>
+</b
