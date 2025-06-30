@@ -10,36 +10,43 @@
   <header>
     <div class="logo" onclick="location.href='main.html'">SEED</div>
     <div class="nav">
-  <div class="dropdown">
-    <button class="dropdown-btn">산불 확산 예측 ▼</button>
-    <div class="dropdown-content">
-      <a href="#search">예측할 지역 검색</a>
-      <a href="#detail">예측 결과 분석</a>
+      <div class="dropdown">
+        <button class="dropdown-btn">산불 확산 예측 ▼</button>
+        <div class="dropdown-content">
+          <a href="#search">예측할 지역 검색</a>
+          <a href="#detail">예측 결과 분석</a>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
     <div class="login-icon">
       <img src="https://cdn-icons-png.flaticon.com/512/847/847969.png" alt="login" />
     </div>
   </header>
 
   <main>
-   <section class="slider-section">
-  <div class="slider-container">
+    <section class="slider-section">
+     <div class="slider-container">
+  <div class="slider-overlay center-style">
+    <h2>산불의 확산, 이제는 예측할 수 있습니다.</h2>
+    <p>강원도를 중심으로 산불 확산 규모와 속도를 미리 감지합니다.</p>
+    <button>About US</button>
+  </div>
+
   <div class="slider-image">
-    <img id="slider" src="img/forest1.jpg" alt="Forest Image" />
-      <div class="slider-overlay">
-        <h2>산불의 확산, 이제는 예측할 수 있습니다.</h2>
-        <p>강원도를 중심으로 산불 확산 규모와 속도를 미리 감지합니다.</p>
-        <button>AI 예측 원리 보기</button>
+    <img class="slider-slide active" src="img/forest1.jpg" alt="Forest 1">
+    <img class="slider-slide" src="img/forest2.jpg" alt="Forest 2">
+    <img class="slider-slide" src="img/forest3.jpg" alt="Forest 3">
+    <img class="slider-slide" src="img/forest4.jpg" alt="Forest 4">
+  </div>
+</div>
       </div>
-    </div>
-  </div>
-  <div class="button-row">
-    <button>예측 검색하기</button>
-    <button>상세 분석 보러가기</button>
-  </div>
-</section>
+
+      <div class="button-row">
+        <button>예측 검색하기</button>
+        <button>상세 분석 보러가기</button>
+      </div>
+    </section>
+
     <section class="hot-zones">
       <h2>🔥 현재 위험도가 높은 지역</h2>
       <div class="zone-cards">
@@ -61,51 +68,81 @@
       </div>
     </section>
   </main>
-<script>
-  const header = document.querySelector("header");
-  let lastToggleY = window.scrollY;
-  let ticking = false;
-  const scrollThreshold = 120;
-  const minScrollToHide = 150;
 
-  function handleScroll() {
-    const currentY = window.scrollY;
-    const delta = currentY - lastToggleY;
+  <footer class="site-footer">
+    <div class="footer-content">
+      <p><strong>SEED</strong> – 산불 예측 시각화 시스템</p>
+      <p class="copyright">© 2025 SEED. All rights reserved.</p>
+    </div>
+  </footer>
 
-    if (Math.abs(delta) >= scrollThreshold) {
-      if (delta > 0 && currentY > minScrollToHide) {
-        header.classList.add("hide");
-      } else if (delta < 0) {
-        header.classList.remove("hide");
+  <script>
+    // 헤더 스크롤 효과
+    const header = document.querySelector("header");
+    let lastToggleY = window.scrollY;
+    let ticking = false;
+    const scrollThreshold = 120;
+    const minScrollToHide = 150;
+
+    function handleScroll() {
+      const currentY = window.scrollY;
+      const delta = currentY - lastToggleY;
+
+      if (Math.abs(delta) >= scrollThreshold) {
+        if (delta > 0 && currentY > minScrollToHide) {
+          header.classList.add("hide");
+        } else if (delta < 0) {
+          header.classList.remove("hide");
+        }
+        lastToggleY = currentY;
       }
-      lastToggleY = currentY;
+
+      ticking = false;
     }
 
-    ticking = false;
+    window.addEventListener("scroll", () => {
+      if (!ticking) {
+        window.requestAnimationFrame(handleScroll);
+        ticking = true;
+      }
+    });
+
+    // 슬라이더 부드러운 자동 전환
+    const slides = document.querySelectorAll('.slider-slide');
+let current = 0;
+let intervalId;
+
+function showSlide(index) {
+  slides.forEach((slide, i) => {
+    slide.classList.toggle('active', i === index);
+  });
+}
+
+function startSlider() {
+  intervalId = setInterval(() => {
+    current = (current + 1) % slides.length;
+    showSlide(current);
+  }, 7000);
+}
+
+document.querySelector('.slider-image').addEventListener('click', (e) => {
+  clearInterval(intervalId);
+  const containerWidth = e.currentTarget.offsetWidth;
+  const clickX = e.offsetX;
+
+  if (clickX < containerWidth / 2) {
+    // 왼쪽 → 이전
+    current = (current - 1 + slides.length) % slides.length;
+  } else {
+    // 오른쪽 → 다음
+    current = (current + 1) % slides.length;
   }
 
-  window.addEventListener("scroll", () => {
-    if (!ticking) {
-      window.requestAnimationFrame(handleScroll);
-      ticking = true;
-    }
-  });
+  showSlide(current);
+  startSlider();
+});
 
-  // 슬라이더 이미지 자동 전환 (부드러운 전환 없이 즉시 교체)
-  const images = ['img/forest1.jpg', 'img/forest2.jpg', 'img/forest3.jpg', 'img/forest4.jpg'];
-  let currentIndex = 0;
-  const slider = document.getElementById('slider');
-
-  setInterval(() => {
-    currentIndex = (currentIndex + 1) % images.length;
-    slider.src = images[currentIndex];
-  }, 6000);
-</script>
-<footer class="site-footer">
-  <div class="footer-content">
-    <p><strong>SEED</strong> – 산불 예측 시각화 시스템</p>
-    <p class="copyright">© 2025 SEED. All rights reserved.</p>
-  </div>
-</footer>
+startSlider();
+  </script>
 </body>
 </html>
