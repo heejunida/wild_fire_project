@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>산불 확산 예측 상세 정보</title>
-  <link rel="stylesheet" href="detail.css">
+  <link rel="stylesheet" href="css/detail.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_APP_KEY"></script>
+  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce"></script>
+      <h1 class="logo">SEED</h1>
+      <h2>실시간 산불 확산 예측 정보</h2>
   <style>
     * {
       box-sizing: border-box;
@@ -17,6 +19,10 @@
       font-family: 'Noto Sans KR', sans-serif;
       background-color: #fff;
       color: #333;
+    }
+      #map {
+      width: 100%;
+      height: 500px;
     }
 
     .top-bar {
@@ -156,7 +162,7 @@
       </div>
 
       <h3>산불 확산 속도 및 범위</h3>
-      <div id="map" class="map-area"></div>
+      <div id="map" class="map-area" style="width: 100%; height: 400px;"></div>
     </section>
 
     <section class="right-panel">
@@ -171,5 +177,5 @@
     </section>
   </main>
 
-  <script src="detail.js"></script>
+  <script src="js/detail.js"></script>
 </b
