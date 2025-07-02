@@ -324,3 +324,163 @@ main {
   font-size: 13px;
   opacity: 0.8;
 }
+
+/* 모달 배경 */
+.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+
+  opacity: 1;
+  transform: scale(1);
+  transition: all 0.8s ease;
+  filter: blur(0px);
+
+}
+
+.modal.hide {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+/* 숨김 클래스 */
+.hidden {
+  display: none;
+}
+
+/* 모달 내부 */
+.modal-content {
+  background-color: white;
+  color: var(--text-main);
+  padding: 80px 100px;
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  width: 540px;
+  max-width: 95%;
+  text-align: center;
+  position: relative;
+}
+
+.modal-content h2 {
+  margin-bottom: 20px;
+  font-size: 30px;
+}
+
+/* X 버튼 */
+.modal-content .close {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  font-size: 24px;
+  cursor: pointer;
+  color: #444;
+}
+
+/* 인풋 공통 */
+.modal-content input {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  margin: 0;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  font-size: 17px;
+}
+
+/* 버튼 스타일 */
+.modal-content button {
+  margin-top: 15px;
+  background-color: #6A9E7C;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  padding: 16px 32px;
+  font-size: 16px;
+}
+
+.modal-content button:hover {
+  background-color: #578368;
+}
+
+/* 메시지 */
+.msg {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: red;
+}
+
+/* 하단 전환 */
+.switch-msg {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #333;
+}
+
+.switch-msg span {
+  color: #457f60;
+  font-weight: bold;
+  cursor: pointer;
+  padding-left: 8px;
+}
+
+/* 로그인 아이콘 */
+.login-icon img {
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+
+/* form 정렬 */
+.modal-form {
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* floating label 인풋 */
+.floating-input {
+  position: relative;
+  margin: 6px 0;
+  width: 100%;
+}
+
+.floating-input input {
+  width: 100%;
+  padding: 16px 14px 12px 14px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  outline: none;
+}
+
+.floating-input label {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  color: #888;
+  font-size: 16px;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  background-color: white; /* 배경과 일치 */
+  padding: 0 4px;
+}
+
+/* 포커스 시 레이블 위로 */
+.floating-input input:focus + label,
+.floating-input input:not(:placeholder-shown):valid + label {
+  top: 2px;
+  font-size: 12px;
+  color: #457f60;
+}

@@ -18,9 +18,9 @@
         </div>
       </div>
     </div>
-    <div class="login-icon">
-      <img src="https://cdn-icons-png.flaticon.com/512/847/847969.png" alt="login" />
-    </div>
+<div class="login-icon">
+<img src="https://cdn-icons-png.flaticon.com/512/847/847969.png" onclick="openModal('loginModal')" alt="login" />
+  </div>
   </header>
 
   <main>
@@ -74,74 +74,50 @@
       <p class="copyright">© 2025 SEED. All rights reserved.</p>
     </div>
   </footer>
+<!-- ✅ 모달 구조: 로그인과 회원가입을 하나의 modal-content 안에서 switch -->
+<div id="loginModal" class="modal hidden">
+  <div class="modal-content fade-scale">
+    <span class="close" onclick="closeModal('loginModal')">&times;</span>
 
-  <script>
-    // 헤더 스크롤 효과
-    const header = document.querySelector("header");
-    let lastToggleY = window.scrollY;
-    let ticking = false;
-    const scrollThreshold = 120;
-    const minScrollToHide = 150;
+    <!-- 로그인 폼 -->
+    <div id="loginForm" class="form-section">
+      <h2>로그인</h2>
+      <div class="modal-form">
+        <div class="floating-input">
+          <input type="text" id="loginId" required />
+          <label for="loginId">아이디</label>
+        </div>
+        <div class="floating-input">
+          <input type="password" id="loginPw" required />
+          <label for="loginPw">비밀번호</label>
+        </div>
+        <button onclick="handleLogin()">로그인</button>
+        <p class="switch-msg">계정이 없으신가요? <span onclick="switchForm('signup')">회원가입 하기</span></p>
+      </div>
+    </div>
 
-    function handleScroll() {
-      const currentY = window.scrollY;
-      const delta = currentY - lastToggleY;
-
-      if (Math.abs(delta) >= scrollThreshold) {
-        if (delta > 0 && currentY > minScrollToHide) {
-          header.classList.add("hide");
-        } else if (delta < 0) {
-          header.classList.remove("hide");
-        }
-        lastToggleY = currentY;
-      }
-
-      ticking = false;
-    }
-
-    window.addEventListener("scroll", () => {
-      if (!ticking) {
-        window.requestAnimationFrame(handleScroll);
-        ticking = true;
-      }
-    });
-
-    // 슬라이더 부드러운 자동 전환
-    const slides = document.querySelectorAll('.slider-slide');
-let current = 0;
-let intervalId;
-
-function showSlide(index) {
-  slides.forEach((slide, i) => {
-    slide.classList.toggle('active', i === index);
-  });
-}
-
-function startSlider() {
-  intervalId = setInterval(() => {
-    current = (current + 1) % slides.length;
-    showSlide(current);
-  }, 7000);
-}
-
-document.querySelector('.slider-image').addEventListener('click', (e) => {
-  clearInterval(intervalId);
-  const containerWidth = e.currentTarget.offsetWidth;
-  const clickX = e.offsetX;
-
-  if (clickX < containerWidth / 2) {
-    // 왼쪽 → 이전
-    current = (current - 1 + slides.length) % slides.length;
-  } else {
-    // 오른쪽 → 다음
-    current = (current + 1) % slides.length;
-  }
-
-  showSlide(current);
-  startSlider();
-});
-
-startSlider();
-  </script>
+    <!-- 회원가입 폼 -->
+    <div id="signupForm" class="form-section hidden">
+      <h2>회원가입</h2>
+      <div class="modal-form">
+        <div class="floating-input">
+          <input type="text" id="signupName" required />
+          <label for="signupName">이름</label>
+        </div>
+        <div class="floating-input">
+          <input type="text" id="signupId" required />
+          <label for="signupId">아이디</label>
+        </div>
+        <div class="floating-input">
+          <input type="password" id="signupPw" required />
+          <label for="signupPw">비밀번호</label>
+        </div>
+        <button onclick="handleSignup()">회원가입</button>
+        <p class="switch-msg">이미 계정이 있으신가요? <span onclick="switchForm('login')">로그인 하기</span></p>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="js/main.js"></script>
 </body>
 </html>
