@@ -1,15 +1,15 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <title>실시간 산불 확산 예측 정보</title>
   <link rel="stylesheet" href="css/search.css" />
-  <!-- Kakao 지도 SDK (autload false → JS에서 load()) -->
   <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce&libraries=services&autoload=false"></script>
 </head>
 <body>
   <header>
-    <div class="logo" onclick="location.href='main.html'">SEED</div>
+    <div class="logo" onclick="location.href='main.jsp'">SEED</div>
     <h1>실시간 산불 확산 예측 정보</h1>
   </header>
   <div class="search-wrap">

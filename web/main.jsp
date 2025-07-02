@@ -1,3 +1,4 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -8,12 +9,12 @@
 </head>
 <body>
   <header>
-    <div class="logo" onclick="location.href='main.html'">SEED</div>
+    <div class="logo" onclick="location.href='main.jsp'">SEED</div>
     <div class="nav">
       <div class="dropdown">
         <button class="dropdown-btn">산불 확산 예측 ▼</button>
         <div class="dropdown-content">
-          <a href="search.html">예측할 지역 검색</a>
+          <a href="search.jsp">예측할 지역 검색</a>
           <a href="detail.html">예측 결과 분석</a>
         </div>
       </div>
@@ -41,8 +42,8 @@
 </div>
       </div>
       <div class="button-row">
-        <button onclick="location.href='search.html'">예측 검색하기</button>
-        <button onclick="location.href='detail.html'">상세 분석 보러가기</button>
+        <button onclick="location.href='search.jsp'">예측 검색하기</button>
+        <button onclick="location.href='detail.jsp'">상세 분석 보러가기</button>
       </div>
     </section>
 

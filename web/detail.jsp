@@ -4,9 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <title>산불 확산 예측 상세 페이지</title>
-  <link rel="stylesheet" href="predictDetail.css">
+  <link rel="stylesheet" href="css/detail.css">
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script defer src="predictDetail.js" type="module"></script>
+  <script defer src="detail.js" type="module"></script>
 </head>
 <body>
   <main class="container">

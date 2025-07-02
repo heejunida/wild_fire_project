@@ -1,5 +1,6 @@
 let currentPage = 1;
-let rowsPerPage = 12; // 기본값은 전체 보기
+let rowsPerPage = 12;
+let maxDataCount = Infinity;
 let fullData = [];
 let marker = null;
 
@@ -15,7 +16,6 @@ kakao.maps.load(() => {
 
   renderPaginatedTableRows([]);
 
-  // ✅ 검색 버튼 클릭
   document.getElementById("searchBtn").addEventListener("click", async () => {
     const selected = document.getElementById("regionSelect").value;
     if (!selected) return alert("지역을 먼저 선택하세요!");
@@ -44,7 +44,6 @@ kakao.maps.load(() => {
     }
   });
 
-  // ✅ 지도 클릭 시
   kakao.maps.event.addListener(map, 'click', mouseEvent => {
     const latlng = mouseEvent.latLng;
 
@@ -87,21 +86,23 @@ kakao.maps.load(() => {
     });
   });
 
-  // ✅ 출력 개수 변경
-document.getElementById("resultCount").addEventListener("change", () => {
-  const val = document.getElementById("resultCount").value;
+  document.getElementById("resultCount").addEventListener("change", () => {
+    const val = document.getElementById("resultCount").value;
 
-  // ✅ 숫자가 아닌 경우 12로 기본 설정
-  rowsPerPage = isNaN(parseInt(val)) ? 12 : parseInt(val);
+    if (val === "default") {
+      maxDataCount = Infinity;
+    } else {
+      maxDataCount = parseInt(val);
+    }
 
-  currentPage = 1;
-  renderPaginatedTableRows(fullData, 1);
-});
-  // ✅ 초기화 버튼
+    currentPage = 1;
+    renderPaginatedTableRows(fullData, 1);
+  });
+
   document.getElementById("resetBtn").addEventListener("click", () => {
     document.getElementById("regionSelect").value = "default";
     document.getElementById("resultCount").value = "default";
-    rowsPerPage = Infinity;
+    maxDataCount = Infinity;
 
     if (marker) {
       marker.setMap(null);
@@ -113,7 +114,6 @@ document.getElementById("resultCount").addEventListener("change", () => {
   });
 });
 
-// ✅ 테이블 출력
 function renderPaginatedTableRows(data, page = 1) {
   fullData = data;
   currentPage = page;
@@ -121,41 +121,14 @@ function renderPaginatedTableRows(data, page = 1) {
   const tbody = document.getElementById("resultBody");
   tbody.innerHTML = "";
 
-  const totalItems = data.length;
+  const limitedData = data.slice(0, maxDataCount);
+  const totalItems = limitedData.length;
 
-  // ✅ rowsPerPage가 12 이상인 경우만 페이지네이션, 나머지는 고정 출력
-  if (document.getElementById("resultCount").value !== "default") {
-    // 무조건 설정한 수만큼만 출력
-    const limitedData = data.slice(0, rowsPerPage);
-    limitedData.forEach(row => {
-      const location = row.location.replace("강원도 ", "");
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${location}</td>
-        <td>${row.area}</td>
-        <td class="${row.danger === "높음" ? "danger" : ""}">${row.danger}</td>
-      `;
-      tbody.appendChild(tr);
-    });
+  const start = (page - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const paginated = limitedData.slice(start, end);
 
-    // 테이블 줄 고정
-    for (let i = limitedData.length; i < 12; i++) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>`;
-      tbody.appendChild(tr);
-    }
-
-    // ✅ 페이지네이션 제거
-    document.querySelector(".pagination").innerHTML = "";
-    return;
-  }
-
-  // 👉 디폴트 상태일 때만 페이지네이션
-  const start = (page - 1) * 12;
-  const end = start + 12;
-  const currentData = data.slice(start, end);
-
-  currentData.forEach(row => {
+  paginated.forEach(row => {
     const location = row.location.replace("강원도 ", "");
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -166,22 +139,22 @@ function renderPaginatedTableRows(data, page = 1) {
     tbody.appendChild(tr);
   });
 
-  for (let i = currentData.length; i < 12; i++) {
+  for (let i = paginated.length; i < 12; i++) {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>`;
     tbody.appendChild(tr);
   }
 
-  renderPagination(totalItems);
+  if (totalItems > rowsPerPage) {
+    renderPagination(totalItems);
+  } else {
+    document.querySelector(".pagination").innerHTML = "";
+  }
 }
 
-// ✅ 페이지네이션
 function renderPagination(totalItems) {
   const pagination = document.querySelector(".pagination");
   pagination.innerHTML = "";
-
-  // ❗ rowsPerPage가 Infinity일 경우 페이지네이션 없음
-  if (rowsPerPage === Infinity || totalItems <= 12) return;
 
   const totalPages = Math.ceil(totalItems / rowsPerPage);
   if (totalPages <= 1) return;
