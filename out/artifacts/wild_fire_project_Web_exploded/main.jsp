@@ -43,7 +43,7 @@
       </div>
       <div class="button-row">
         <button onclick="location.href='search.jsp'">예측 검색하기</button>
-        <button onclick="location.href='detail.html'">상세 분석 보러가기</button>
+        <button onclick="location.href='detail.jsp'">상세 분석 보러가기</button>
       </div>
     </section>
 

@@ -5,7 +5,6 @@
   <meta charset="UTF-8" />
   <title>실시간 산불 확산 예측 정보</title>
   <link rel="stylesheet" href="css/search.css" />
-  <!-- Kakao 지도 SDK (autload false → JS에서 load()) -->
   <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce&libraries=services&autoload=false"></script>
 </head>
 <body>
@@ -77,7 +76,6 @@
     </div>
   </div>
 
-  <!-- JS 파일 연결 -->
-  <script type="module" src="js/search.js"></script>
+  <script src="js/search.js"></script>
 </body>
 </html>

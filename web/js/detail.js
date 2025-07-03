@@ -1,71 +1,63 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const sido = document.getElementById("sido");
-  const sigungu = document.getElementById("sigungu");
-  const searchBtn = document.getElementById("searchBtn");
-  const resetBtn = document.getElementById("resetBtn");
+let map;
+let markers = [];
 
-  const mapContainer = document.getElementById("map");
-  const lineChartCanvas = document.getElementById("lineChart");
-  const barChartCanvas = document.getElementById("barChart");
-  const compareList = document.getElementById("compareList");
-
-  // 지역 선택 → 하위 군/구 연동 (샘플)
-  sido.addEventListener("change", () => {
-    sigungu.innerHTML = "<option>군/구 선택</option>";
-    if (sido.value === "춘천시") {
-      sigungu.innerHTML += "<option>동면</option><option>신북읍</option>";
-    }
-    // 실제는 서버나 지역 DB 기반으로 동적 구성
+kakao.maps.load(() => {
+  map = new kakao.maps.Map(document.getElementById("map"), {
+    center: new kakao.maps.LatLng(37.8228, 128.1555),
+    level: 9
   });
 
-  // 검색 버튼 클릭
-  searchBtn.addEventListener("click", () => {
-    const region = `${sido.value} ${sigungu.value}`;
-    if (!sido.value || !sigungu.value) {
+  document.getElementById("searchBtn").addEventListener("click", async () => {
+    const selected = document.getElementById("regionSelect").value;
+    if (!selected) {
       alert("지역을 선택해주세요.");
       return;
     }
 
-    // 1. 지도에 마커/폴리곤 + 등급 표시
-    // 2. 차트 업데이트
-    // 3. compare 리스트에 지역 추가
-    addRegionToCompare(region);
-    updateLineChart(region);
-    updateBarChart(); // compare 리스트 기준
-  });
+    try {
+      const response = await fetch("json/mock_forest_locations_with_coords.json");
+      const data = await response.json();
+      const locations = data[selected];
 
-  // 초기화 버튼
-  resetBtn.addEventListener("click", () => {
-    compareList.innerHTML = "";
-    lineChartCanvas.getContext('2d').clearRect(0, 0, lineChartCanvas.width, lineChartCanvas.height);
-    barChartCanvas.getContext('2d').clearRect(0, 0, barChartCanvas.width, barChartCanvas.height);
-  });
+      if (!locations || locations.length === 0) {
+        alert("해당 지역의 산림 정보가 없습니다.");
+        return;
+      }
 
-  // 지역 태그 추가
-  function addRegionToCompare(region) {
-    if (compareList.children.length >= 5) {
-      alert("비교 지역은 최대 5개까지 가능합니다.");
-      return;
+      // 기존 마커 제거
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+
+      // 중심 좌표 재설정 (첫 번째 위치 기준)
+      const first = locations[0];
+      map.setCenter(new kakao.maps.LatLng(first.lat, first.lng));
+
+      // 마커 생성
+      locations.forEach(loc => {
+        const marker = new kakao.maps.Marker({
+          map,
+          position: new kakao.maps.LatLng(loc.lat, loc.lng),
+          title: loc.location
+        });
+        markers.push(marker);
+      });
+
+    } catch (err) {
+      console.error("데이터 로딩 오류", err);
+      alert("산림 데이터를 불러오는 데 실패했습니다.");
     }
+  });
+});
+document.addEventListener("DOMContentLoaded", () => {
+  const hamburger = document.getElementById("hamburgerBtn");
+  const sideMenu = document.getElementById("sideMenu");
+  const closeBtn = document.getElementById("closeMenu");
 
-    const tag = document.createElement("div");
-    tag.className = "tag";
-    tag.innerHTML = `${region}<span class="remove">✕</span>`;
-    tag.querySelector(".remove").addEventListener("click", () => {
-      tag.remove();
-      updateBarChart();
-    });
+  hamburger.addEventListener("click", () => {
+    sideMenu.classList.add("active");
+  });
 
-    compareList.appendChild(tag);
-  }
-
-  // 차트 업데이트 함수 (샘플)
-  function updateLineChart(region) {
-    // 실제 예측 거리 데이터를 fetch → 차트에 반영
-  }
-
-  function updateBarChart() {
-    // compareList.children 기준으로 지역별 속도 등급 분포 계산 후 Chart.js로 시각화
-  }
-
+  closeBtn.addEventListener("click", () => {
+    sideMenu.classList.remove("active");
+  });
 });

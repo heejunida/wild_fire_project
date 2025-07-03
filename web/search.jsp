@@ -76,7 +76,6 @@
     </div>
   </div>
 
-  <!-- JS 파일 연결 -->
-  <script type="module" src="js/search.js"></script>
+  <script src="js/search.js"></script>
 </body>
 </html>
