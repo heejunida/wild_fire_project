@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/main.css" />
 </head>
 <body>
+<div class = "wrapper">
   <header>
     <div class="logo" onclick="location.href='main.jsp'">SEED</div>
     <div class="nav">
@@ -40,7 +41,6 @@
     <img class="slider-slide" src="img/forest4.jpg" alt="Forest 4">
   </div>
 </div>
-      </div>
       <div class="button-row">
         <button onclick="location.href='search.jsp'">예측 검색하기</button>
         <button onclick="location.href='detail.jsp'">상세 분석 보러가기</button>
@@ -68,11 +68,11 @@
       </div>
     </section>
   </main>
+</div>
 
-  <footer class="site-footer">
+  <footer id="siteFooter" class="site-footer">
     <div class="footer-content">
-      <p><strong>SEED</strong> – 산불 예측 시각화 시스템</p>
-      <p class="copyright">© 2025 SEED. All rights reserved.</p>
+      <p>© 2025 SEED. All rights reserved.</p>
     </div>
   </footer>
 <!-- ✅ 모달 구조: 로그인과 회원가입을 하나의 modal-content 안에서 switch -->

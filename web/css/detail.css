@@ -27,25 +27,36 @@ body {
   background-color: var(--bg-main);
   font-family: 'Noto Sans KR', sans-serif;
   color: var(--text-main);
+  padding-top: 100px;
 }
+
 
 header {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
+  z-index: 999;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 16px 24px;
   background-color: var(--bg-main);
-  color: var(--text-main);
+  color: var(--text-light);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  transition: top 0.4s ease-in-out;
+}
+header.hide {
+  top: -100px;
 }
 
+
 header h1 {
-  font-size: 25px;
+  font-size: 24px;
   font-weight: bold;
   flex: 1;
-  margin-left: 30px;
+  margin-left: 24px;
+  color: var(--text-main);
 }
 
 .logo {
@@ -58,7 +69,7 @@ header h1 {
 .search-wrap {
   display: flex;
   flex-direction: row;
-  padding: 30px 40px;
+  padding: 0 40px;
   gap: 20px;
   justify-content: space-between;
   align-items: flex-start;
@@ -166,14 +177,15 @@ header h1 {
   header {
     flex-direction: column;
     align-items: center;
-  }
-
-  .logo {
-    margin-bottom: 8px;
+    text-align: center;
   }
 
   header h1 {
-    text-align: center;
+    margin: 8px 0 0 0;
+    font-size: 20px;
+  }
+  .logo {
+    margin-bottom: 8px;
   }
 
   .compare-area {
@@ -184,15 +196,18 @@ header h1 {
 /* 햄버거 버튼 */
 #hamburgerBtn {
   position: fixed;
-  top: 20px;
+  top: 15px;
   right: 20px;
   font-size: 26px;
-  background-color: var(--bg-header);
-  color: white;
+  color: var(--bg-header);
   padding: 10px 14px;
   border-radius: 8px;
   cursor: pointer;
   z-index: 10000;
+}
+
+#sideMenu.active + #hamburgerBtn {
+  color: white;
 }
 
 /* 사이드 메뉴 전체 */
@@ -208,6 +223,10 @@ header h1 {
   transition: right 0.3s ease;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
   z-index: 9999;
+}
+
+#hamburgerBtn.active {
+  color: white;
 }
 
 /* 메뉴 열렸을 때 */

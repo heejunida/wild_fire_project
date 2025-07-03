@@ -21,11 +21,26 @@
 html {
   scroll-behavior: smooth;
 }
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
 
 body {
   background-color: var(--bg-main);
   font-family: 'Noto Sans KR', sans-serif;
   color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.wrapper {
+  flex: 1;  /* main 영역을 밀어줌 */
+  display: flex;
+  flex-direction: column;
 }
 
 header {
@@ -72,7 +87,8 @@ header.hide {
 
 main {
   text-align: center;
-  padding-top: 0px;
+  padding-top: 0;
+  flex: 1;
 }
 
 .slider-section {
@@ -304,14 +320,14 @@ main {
   color: var(--accent-3);
   font-weight: bold;
 }
-
 .site-footer {
   background-color: var(--bg-section);
-  color: var(--text-footer);
+  color: var(--bg-footer);
   padding: 30px 20px;
   text-align: center;
   font-size: 14px;
-  margin-top: 80px;
+  margin-bottom: 0;
+  margin-top: auto;
 }
 
 .footer-content p {

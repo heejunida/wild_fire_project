@@ -13,7 +13,6 @@
 <div id="hamburgerBtn">☰</div>
 <div id="sideMenu">
   <div class="side-menu">
-    <button id="closeMenu">❌</button>
     <ul>
       <li><a href="#map">🗺 지도</a></li>
       <li><a href="#lineChart">📈 시간별 변화</a></li>

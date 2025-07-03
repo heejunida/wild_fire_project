@@ -53,11 +53,43 @@ document.addEventListener("DOMContentLoaded", () => {
   const sideMenu = document.getElementById("sideMenu");
   const closeBtn = document.getElementById("closeMenu");
 
+  // 햄버거 버튼 클릭 시 토글
   hamburger.addEventListener("click", () => {
-    sideMenu.classList.add("active");
+    sideMenu.classList.toggle("active");
+    hamburger.classList.toggle("active");
   });
 
+  // 닫기 버튼은 그대로
   closeBtn.addEventListener("click", () => {
     sideMenu.classList.remove("active");
   });
+});
+
+const header = document.querySelector("header");
+let lastToggleY = window.scrollY;
+let ticking = false;
+const scrollThreshold = 120;
+const minScrollToHide = 150;
+
+function handleScroll() {
+  const currentY = window.scrollY;
+  const delta = currentY - lastToggleY;
+
+  if (Math.abs(delta) >= scrollThreshold) {
+    if (delta > 0 && currentY > minScrollToHide) {
+      header.classList.add("hide");
+    } else if (delta < 0) {
+      header.classList.remove("hide");
+    }
+    lastToggleY = currentY;
+  }
+
+  ticking = false;
+}
+
+window.addEventListener("scroll", () => {
+  if (!ticking) {
+    window.requestAnimationFrame(handleScroll);
+    ticking = true;
+  }
 });

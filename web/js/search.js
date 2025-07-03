@@ -179,3 +179,32 @@ function renderPagination(totalItems) {
   nextBtn.addEventListener("click", () => renderPaginatedTableRows(fullData, currentPage + 1));
   pagination.appendChild(nextBtn);
 }
+
+const header = document.querySelector("header");
+let lastToggleY = window.scrollY;
+let ticking = false;
+const scrollThreshold = 120;
+const minScrollToHide = 150;
+
+function handleScroll() {
+  const currentY = window.scrollY;
+  const delta = currentY - lastToggleY;
+
+  if (Math.abs(delta) >= scrollThreshold) {
+    if (delta > 0 && currentY > minScrollToHide) {
+      header.classList.add("hide");
+    } else if (delta < 0) {
+      header.classList.remove("hide");
+    }
+    lastToggleY = currentY;
+  }
+
+  ticking = false;
+}
+
+window.addEventListener("scroll", () => {
+  if (!ticking) {
+    window.requestAnimationFrame(handleScroll);
+    ticking = true;
+  }
+});
