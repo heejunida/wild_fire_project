@@ -16,7 +16,6 @@ function handleScroll() {
     }
     lastToggleY = currentY;
   }
-
   ticking = false;
 }
 

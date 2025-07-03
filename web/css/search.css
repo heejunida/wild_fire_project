@@ -29,6 +29,18 @@ body {
   padding-top: 100px;
 }
 
+.wrapper {
+  flex: 1;  /* main 영역을 밀어줌 */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  text-align: center;
+  padding-top: 0;
+  flex: 1;
+}
 
 header {
   position: fixed;
@@ -45,10 +57,16 @@ header {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   transition: top 0.4s ease-in-out;
 }
+
 header.hide {
   top: -100px;
 }
 
+.wrapper {
+  flex: 1;  /* main 영역을 밀어줌 */
+  display: flex;
+  flex-direction: column;
+}
 /* 타이틀 (오른쪽 또는 가운데) */
 header h1 {
   font-size: 24px;
@@ -67,13 +85,13 @@ header h1 {
 
 main {
   text-align: center;
-  padding-top: 0px;
+  padding-top: 0;
 }
 
 .search-wrap {
   display: flex;
   flex-direction: row;
-  padding: 0 40px;
+  padding: 35px 40px 35px 20px;
   gap: 20px;
   justify-content: space-between;
   align-items: flex-start;
@@ -111,6 +129,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  padding: 10px;
   align-items: center;
   margin: 0 0 20px 0; 
   justify-content: center; 
@@ -273,4 +292,26 @@ main {
     text-align: center;
   }
 }
+
+.site-footer {
+  background-color: var(--bg-section);
+  color: var(--bg-footer);
+  padding: 30px 20px;
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 0;
+  margin-top: auto;
+}
+
+.footer-content p {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.footer-content .copyright {
+  margin-top: 20px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
 

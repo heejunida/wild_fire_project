@@ -8,6 +8,7 @@
   <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce&libraries=services&autoload=false"></script>
 </head>
 <body>
+<div class="wrapper">
   <header>
     <div class="logo" onclick="location.href='main.jsp'">SEED</div>
     <h1>실시간 산불 확산 예측 정보</h1>
@@ -75,7 +76,12 @@
       <div id="map"></div>
     </div>
   </div>
-
-  <script src="js/search.js"></script>
+</div>
+  <footer id="siteFooter" class="site-footer">
+    <div class="footer-content">
+      <p>© 2025 SEED. All rights reserved.</p>
+    </div>
+  </footer>
+<script src="js/search.js"></script>
 </body>
 </html>

@@ -28,8 +28,29 @@ body {
   font-family: 'Noto Sans KR', sans-serif;
   color: var(--text-main);
   padding-top: 100px;
+  overflow-x: hidden;
+  margin: 0;
+  min-height: 100vh;
 }
 
+main {
+  text-align: center;
+  padding-top: 0;
+  flex: 1;
+}
+
+.wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.chart-container h3{
+  margin-bottom: 100px;
+  padding: 20px;
+  font-size: 25px;
+}
 
 header {
   position: fixed;
@@ -78,19 +99,22 @@ header h1 {
 /* 왼쪽: 선택 영역 + 지도 */
 .search-left {
   width: 50%;
+  align-items: center;
 }
 
 .search-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  padding: 10px;
   align-items: center;
   margin-bottom: 20px;
+  justify-content: center;
 }
 
 .search-bar label {
   font-weight: bold;
-  font-size: 20px;
+  font-size: 25px;
   margin-right: 10px;
 }
 
@@ -107,6 +131,10 @@ header h1 {
   padding: 20px;
   border-radius: 16px;
   box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+.map-container h3{
+  padding: 20px;
+  font-size: 25px;
 }
 
 #map {
@@ -128,7 +156,7 @@ header h1 {
   padding: 20px;
   border-radius: 16px;
   box-shadow: 0 0 10px rgba(0,0,0,0.05);
-  height: 680px;
+  height: 740px;
 }
 
 /* 하단: 비교용 차트 */
@@ -138,7 +166,12 @@ header h1 {
   margin: 20px 40px;
   border-radius: 16px;
   height: 900px;
+
   box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+.compare-area h3{
+  padding: 20px 20px 10px 20px;
+  font-size: 25px;
 }
 
 .compare-tags {
@@ -146,6 +179,10 @@ header h1 {
   gap: 8px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+.blank{
+  margin: 60px;
 }
 
 .compare-tags .tag {
@@ -193,6 +230,40 @@ header h1 {
     padding: 20px;
   }
 }
+.selected-regions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.region-tag {
+  display: flex;
+  background-color: #fff;
+  border: 1.5px solid #ccc;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 20px;
+  color: #333;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+}
+
+.region-tag:hover {
+  background-color: #f9f9f9;
+}
+
+.region-tag .region-name {
+  margin-right: 8px;
+}
+
+.region-tag .remove-btn {
+  cursor: pointer;
+  font-weight: bold;
+  color: #888;
+}
+
 /* 햄버거 버튼 */
 #hamburgerBtn {
   position: fixed;
@@ -269,4 +340,25 @@ header h1 {
 /* 전체 화면 이동 효과 제거 (이제 안 씀) */
 body.shifted {
   transform: none;
+}
+
+.site-footer {
+  background-color: var(--bg-section);
+  color: var(--bg-footer);
+  padding: 30px 20px;
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 0;
+  margin-top: auto;
+}
+
+.footer-content p {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.footer-content .copyright {
+  margin-top: 20px;
+  font-size: 13px;
+  opacity: 0.8;
 }
