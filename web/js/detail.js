@@ -144,3 +144,17 @@ window.addEventListener("scroll", () => {
     ticking = true;
   }
 });
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  document.getElementById("regionSelect").value = "default";
+  document.getElementById("resultCount").value = "default";
+  maxDataCount = Infinity;
+
+  if (marker) {
+    marker.setMap(null);
+    marker = null;
+  }
+
+  renderPaginatedTableRows([]);
+  document.querySelector(".pagination").innerHTML = "";
+});

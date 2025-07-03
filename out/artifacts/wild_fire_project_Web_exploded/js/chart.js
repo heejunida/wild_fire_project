@@ -60,7 +60,6 @@ function createSpeedLevelChart(data) {
     });
 }
 
-// 📌 모의 데이터 생성 함수들
 function generateMockLineData(region) {
     return {
         labels: ["T+1h", "T+2h", "T+3h", "T+4h", "T+5h"],

@@ -74,12 +74,10 @@
         </div>
     </div>
 
-    <!-- 하단: 비교 차트 -->
     <section class="compare-area">
         <h3>지역별 확산 속도 등급별 분포</h3>
         <div id="selectedRegions" class="selected-regions"></div>
         <canvas id="speedLevelChart" width="600" height="300"></canvas>
-        <!-- 선택된 지역 태그 동적으로 삽입됨 -->
     </section>
 </div>
 <div class = "blank"></div>
