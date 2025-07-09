@@ -5,7 +5,7 @@ import ee
 ee.Authenticate()
 ee.Initialize(project='deep-theorem-456805-p2')
 
-df = pd.read_csv("gangwon_fire_ml_input.csv")  # 네 입력 파일
+df = pd.read_csv("gangwon_fire_ml_input.csv")
 
 def get_dem_slope_aspect(lat, lng):
     try:
