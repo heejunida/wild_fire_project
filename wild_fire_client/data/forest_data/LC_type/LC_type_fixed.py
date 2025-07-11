@@ -18,7 +18,8 @@ for idx, row in df.iterrows():
     found = False
     forest_type_mode = None
     search_year = year
-    for _ in range(5):  # 최근 5년 내에서만 찾음 (필요시 늘려도 됨)
+
+    for attempt in range(5):  # 최근 5년 내에서 찾음
         try:
             # (1) 해당 연도 LC_Type1 이미지 뽑기
             img = ee.ImageCollection("MODIS/061/MCD12Q1") \
@@ -26,6 +27,10 @@ for idx, row in df.iterrows():
                 .filterBounds(ee.Geometry.Point(lng, lat)) \
                 .first()
             if img is None or img.getInfo() is None:
+                # 2024년도 실패시 2023년도 한 번 더 시도
+                if search_year == 2024:
+                    search_year = 2023
+                    continue
                 search_year -= 1
                 continue
 
@@ -50,6 +55,10 @@ for idx, row in df.iterrows():
                 search_year -= 1
         except Exception as e:
             print(f"[{idx+1}] {search_year}년 mode 추출 실패: {lat}, {lng} - {e}")
+            # 2024 실패시 2023 대체 재시도
+            if search_year == 2024:
+                search_year = 2023
+                continue
             search_year -= 1
 
     if not found:
