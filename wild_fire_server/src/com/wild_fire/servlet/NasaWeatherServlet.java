@@ -17,7 +17,7 @@ public class NasaWeatherServlet extends HttpServlet {
         String lng = request.getParameter("lng");
 
         // 2. 파이썬 실행 경로 지정
-        String pyPath = "/Users/heejunida/Desktop/kg/wildFire1/wild_fire_project/wild_fire_client/data/fetch_weather_data.py";
+        String pyPath = "/Users/heejunida/Desktop/kg/wildFire1/wild_fire_project/wild_fire_client/data/data_code/fire_data/fetch_weather_data.py";
 
         // 3. 파이썬 프로세스 실행 명령 준비
         ProcessBuilder pb = new ProcessBuilder("python3", pyPath, lat, lng);
