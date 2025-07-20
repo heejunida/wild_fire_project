@@ -9,7 +9,7 @@ import pandas as pd
 ee.Initialize(project='deep-theorem-456805-p2') # Replace with your GEE project ID
 
 # 2. 산불이력 데이터 불러오기
-in_csv = "fire_csv/gangwon_fire_ml_input.csv"
+in_csv = "fire_merged_with_ndvi_before.csv"
 try:
     df = pd.read_csv(in_csv, encoding='utf-8-sig')
 except FileNotFoundError:
@@ -102,8 +102,6 @@ for idx, row in df.iterrows():
 
 # 3. 결과 컬럼 추가/저장
 df['treecover_pre_fire_5x5'] = treecover_pre_fire_5x5      # 산불 전(실제 존재) 숲 피복률(평균)
-df['treecover_pixel_count'] = treecover_pixel_cnt          # 산정된 유효 픽셀 개수(숲 존재 픽셀 수)
-df['treecover_fireyear'] = treecover_used_fireyear         # 각 레코드의 산불 연도
 
 out_csv = "fire_with_treecover_pre_fire_5x5.csv"
 df.to_csv(out_csv, index=False, encoding='utf-8-sig')

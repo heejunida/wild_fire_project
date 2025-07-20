@@ -8,7 +8,7 @@ ee.Authenticate()
 ee.Initialize(project='deep-theorem-456805-p2')
 
 # 2. 산불 데이터 읽기 (fire_date, lat, lng 필수)
-df = pd.read_csv("gangwon_fire_ml_input.csv")
+df = pd.read_csv("fire_weather_merged_final.csv")
 print(f"전체 데이터: {len(df)}개")
 
 ndvi_before_list = []
@@ -56,6 +56,7 @@ for idx, row in df.iterrows():
             # 산불 발생일 기준 NDVI가 며칠 전 값인지
             days_before = (fire_dt - datetime.strptime(ndvi_date, '%Y-%m-%d')).days
             ndvi_before_days_list.append(days_before)
+            print("성공하는중")
         else:
             ndvi_before_list.append(None)
             ndvi_before_date_list.append(None)
@@ -73,8 +74,6 @@ for idx, row in df.iterrows():
 
 # 4. 컬럼 추가 및 저장
 df['ndvi_before'] = ndvi_before_list
-df['ndvi_before_date'] = ndvi_before_date_list
-df['ndvi_before_days'] = ndvi_before_days_list
 
-df.to_csv('fire_with_ndvi_before.csv', index=False, encoding='utf-8-sig')
+df.to_csv('fire_merged_with_ndvi_before.csv', index=False, encoding='utf-8-sig')
 print(f"NDVI(직전) 추출 완료: {len(df)}건 (fire_with_ndvi_before.csv)")
