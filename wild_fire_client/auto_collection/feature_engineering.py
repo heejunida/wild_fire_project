@@ -2,170 +2,168 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+import argparse
 
-# 유틸 함수 모듈 경로 추가 (서브폴더 구조일 때)
+# Add the utility function module path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from util.fwi_calc import fwi_calc  # 만약 없으면 이 부분만 직접 구현/주석!
+from util.fwi_calc import fwi_calc
 
-# === 1. 데이터 로드 ===
-df = pd.read_csv("gangwon_fire_dem_slope_aspect_window.csv")  # 파일명만 맞게!
+EPS = 1e-6  # To prevent zero division
 
-EPS = 1e-6  # Zero division 방지
-
-# === 2. 불필요한 문자형/주소/행정구역 컬럼 제거 ===
-drop_cols = [
-    'gungu', 'eupmyeon', 'dongri', 'jibun', 'locsi', 'matched_address',
-    'lat', 'lng',
-    # 'fire_date',  # 계절 파생 뒤에 삭제!
-]
-df = df.drop(columns=[col for col in drop_cols if col in df.columns])
-
-# === 3. 관측치 없음(NaN) 변환: 0.0 → NaN (기상 변수만!) ===
-weather_cols = [
-    col for col in df.columns
-    if any(x in col for x in [
-        'T2M_', 'RH2M_', 'WS2M_', 'WS10M_', 'PRECTOTCORR_', 'WD2M_', 'WD10M_'
-    ])
-]
-for col in weather_cols:
-    df[col] = df[col].replace(0.0, np.nan)
-
-# === 4. 기본 피처 파생 ===
-df['dry_windy_combo'] = df['dry_days_30d_start'] * df['WS10M_0h']
-df['hot_dry_combo'] = df['T2M_0h'] / (df['RH2M_0h'] + EPS)
-df['fuel_combo'] = df['treecover_pre_fire_5x5'] * df['ndvi_before']
-df['slope_south_combo'] = df['slope_mean'] * df['aspect_south_ratio']
-df['potential_spread_index'] = df['dry_windy_combo'] * df['fuel_combo']
-df['treecover_var_effect'] = df['treecover_pre_fire_5x5']
-df['terrain_var_effect'] = df['elevation_std'] + df['slope_std']
-df['south_steep_effect'] = df['slope_max'] * df['aspect_south_ratio']
-
-# === 5. 기후 시계열 변동성 (0~12h, 5개 시점만!) ===
-for var in ['WS10M', 'T2M', 'RH2M', 'WD10M']:
+def calculate_fwi_components(row, hour=None):
+    """Calculates all FWI components for a given row and time step."""
     try:
+        # If hour is specified, use f-string to get the correct column name
+        if hour is not None:
+            t_col, rh_col, w_col, p_col = f'T2M_{hour}h', f'RH2M_{hour}h', f'WS10M_{hour}h', f'PRECTOTCORR_{hour}h'
+        else: # Default to 0h if no hour is specified
+            t_col, rh_col, w_col, p_col = 'T2M_0h', 'RH2M_0h', 'WS10M_0h', 'PRECTOTCORR_0h'
+
+        T = row.get(t_col, np.nan)
+        RH = row.get(rh_col, np.nan)
+        W = row.get(w_col, np.nan)
+        P = row.get(p_col, 0) # Precipitation defaults to 0 if not present
+        month = row.get('fire_month', 6)
+
+        # Return a dictionary of NaNs if essential weather data is missing
+        if pd.isna(T) or pd.isna(RH) or pd.isna(W):
+            return {comp: np.nan for comp in ['FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI']}
+
+        # Calculate FWI and return all components
+        res = fwi_calc(T=T, RH=RH, W=W, P=P, month=month, FFMC0=85, DMC0=6, DC0=15)
+        return res
+
+    except Exception:
+        # Return NaNs if any other error occurs
+        return {comp: np.nan for comp in ['FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI']}
+
+def feature_engineer(input_path, output_path):
+    """
+    Loads wildfire data, engineers a rich set of features, and saves the result.
+    """
+    # === 1. Load Data ===
+    df = pd.read_csv(input_path)
+    print(f"Loaded data with shape: {df.shape}")
+
+    # === 2. Drop Unnecessary Columns ===
+    drop_cols = [
+        'gungu', 'eupmyeon', 'dongri', 'jibun', 'locsi', 'matched_address',
+        'lat', 'lng',
+    ]
+    df = df.drop(columns=[col for col in drop_cols if col in df.columns])
+
+    # === 3. Handle Missing Weather Data (0.0 -> NaN) ===
+    weather_cols = [
+        col for col in df.columns
+        if any(x in col for x in ['T2M_', 'RH2M_', 'WS2M_', 'WS10M_', 'PRECTOTCORR_', 'WD2M_', 'WD10M_'])
+    ]
+    for col in weather_cols:
+        df[col] = df[col].replace(0.0, np.nan)
+
+    # === 4. Derive Seasonal Features ===
+    if 'fire_date' in df.columns:
+        df['fire_month'] = pd.to_datetime(df['fire_date']).dt.month
+        df['is_spring'] = df['fire_month'].isin([3, 4, 5]).astype(int)
+        df['is_autumn'] = df['fire_month'].isin([9, 10, 11]).astype(int)
+        df = df.drop(columns=['fire_date'])
+        print("Derived seasonal features.")
+
+    # === 5. Calculate FWI and its components for 0h and means ===
+    try:
+        # Calculate for 0h
+        fwi_0h_results = df.apply(lambda row: calculate_fwi_components(row, hour=0), axis=1)
+        fwi_0h_df = pd.DataFrame(fwi_0h_results.tolist()).add_suffix('_0h')
+        df = pd.concat([df, fwi_0h_df], axis=1)
+        print("Calculated FWI components for 0h.")
+
+        # Calculate for mean over 0-12h
+        fwi_components = ['FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI']
+        fwi_hourly_dfs = []
+        for h in [0, 3, 6, 9, 12]:
+            if f'T2M_{h}h' in df.columns:
+                hourly_results = df.apply(lambda row: calculate_fwi_components(row, hour=h), axis=1)
+                hourly_df = pd.DataFrame(hourly_results.tolist()).add_suffix(f'_{h}h')
+                fwi_hourly_dfs.append(hourly_df)
+
+        if fwi_hourly_dfs:
+            # Concatenate all hourly FWI dataframes
+            full_hourly_fwi = pd.concat(fwi_hourly_dfs, axis=1)
+            # Calculate the mean for each component across the time steps
+            for comp in fwi_components:
+                comp_cols = [f'{comp}_{h}h' for h in [0, 3, 6, 9, 12] if f'{comp}_{h}h' in full_hourly_fwi.columns]
+                if comp_cols:
+                    df[f'{comp}_mean_0_12h'] = full_hourly_fwi[comp_cols].mean(axis=1)
+            print("Calculated mean FWI components for 0-12h.")
+
+    except ImportError:
+        print("Warning: 'fwi_calc' not found. Skipping FWI feature generation.")
+    except Exception as e:
+        print(f"An error occurred during FWI calculation: {e}")
+
+
+    # === 6. Basic Feature Engineering ===
+    df['dry_windy_combo'] = df['dry_days_30d_start'] * df.get('WS10M_0h', np.nan)
+    df['hot_dry_combo'] = df.get('T2M_0h', np.nan) / (df.get('RH2M_0h', np.nan) + EPS)
+    df['fuel_combo'] = df['treecover_pre_fire_5x5'] * df['ndvi_before']
+    df['slope_south_combo'] = df['slope_mean'] * df['aspect_south_ratio']
+    df['potential_spread_index'] = df['dry_windy_combo'] * df['fuel_combo']
+    df['terrain_var_effect'] = df['elevation_std'] + df['slope_std']
+    df['south_steep_effect'] = df['slope_max'] * df['aspect_south_ratio']
+    print("Created basic interaction features.")
+
+    # === 7. Climate Time-Series Variability (0-12h) ===
+    for var in ['WS10M', 'T2M', 'RH2M', 'WD10M']:
         cols = [f"{var}_{h}h" for h in [0, 3, 6, 9, 12] if f"{var}_{h}h" in df.columns]
         if len(cols) >= 2:
-            df[f"{var}_std"] = df[cols].std(axis=1)
-    except Exception as e:
-        print(f"변동성 계산 에러: {var}", e)
+            df[f"{var}_std_0_12h"] = df[cols].std(axis=1)
 
-# === 6. 최고/최저 값 피처 ===
-try:
+    # === 8. Max/Min Value Features ===
     ws_cols = [f'WS10M_{h}h' for h in [0, 3, 6, 9, 12] if f'WS10M_{h}h' in df.columns]
     rh_cols = [f'RH2M_{h}h' for h in [0, 3, 6, 9, 12] if f'RH2M_{h}h' in df.columns]
     t2m_cols = [f'T2M_{h}h' for h in [0, 3, 6, 9, 12] if f'T2M_{h}h' in df.columns]
-    if ws_cols: df['max_wind'] = df[ws_cols].max(axis=1)
-    if rh_cols: df['min_humidity'] = df[rh_cols].min(axis=1)
-    if t2m_cols: df['max_temp'] = df[t2m_cols].max(axis=1)
-except Exception as e:
-    print("최고/최저값 에러:", e)
+    if ws_cols: df['max_wind_0_12h'] = df[ws_cols].max(axis=1)
+    if rh_cols: df['min_humidity_0_12h'] = df[rh_cols].min(axis=1)
+    if t2m_cols: df['max_temp_0_12h'] = df[t2m_cols].max(axis=1)
+    print("Created variability and min/max features.")
 
-# === 7. 풍향/풍속 일관성 ===
-try:
-    wd_cols = [f'WD10M_{h}h' for h in [0, 3, 6, 9, 12] if f'WD10M_{h}h' in df.columns]
-    if wd_cols:
-        df['WD10M_var'] = df[wd_cols].std(axis=1)
-    if 'WS10M_std' in df.columns and 'WD10M_var' in df.columns:
-        df['wind_steady'] = ((df['WS10M_std'] < 2) & (df['WD10M_var'] < 30)).astype(int)
-except Exception as e:
-    print("풍향/풍속 일관성 에러:", e)
+    # === 9. Wind Consistency ===
+    if 'WS10M_std_0_12h' in df.columns:
+        wd_cols = [f'WD10M_{h}h' for h in [0, 3, 6, 9, 12] if f'WD10M_{h}h' in df.columns]
+        if wd_cols:
+            df['WD10M_var_0_12h'] = df[wd_cols].std(axis=1)
+            df['wind_steady_flag'] = ((df['WS10M_std_0_12h'] < 2) & (df['WD10M_var_0_12h'] < 30)).astype(int)
 
-# === 8. 연속 무강수/누적강수 비율 ===
-df['dry_to_rain_ratio'] = df['dry_days_30d_start'] / (df['total_precip_30d_start'] + EPS)
+    # === 10. Other Engineered Features ===
+    df['dry_to_rain_ratio_30d'] = df['dry_days_30d_start'] / (df['total_precip_30d_start'] + EPS)
+    df['ndvi_stress'] = 0.7 - df['ndvi_before'] # Assuming 0.7 is a healthy baseline
+    df['high_wind_flag'] = (df.get('max_wind_0_12h', 0) > 7).astype(int)
+    df['low_humidity_flag'] = (df.get('min_humidity_0_12h', 100) < 30).astype(int)
+    df['extreme_hot_flag'] = (df.get('max_temp_0_12h', 0) > 33).astype(int)
+    print("Created additional flag and ratio features.")
 
-# === 9. NDVI 스트레스 ===
-NDVI_BASELINE = 0.7
-df['ndvi_stress'] = NDVI_BASELINE - df['ndvi_before']
+    # === 11. Handle NaN/Inf values ===
+    df = df.replace([np.inf, -np.inf], np.nan)
+    print(f"Replaced Inf values. Shape after all steps: {df.shape}")
 
-# === 10. 산불 위험 종합 점수 ===
-if set(['dry_windy_combo', 'hot_dry_combo', 'max_wind', 'ndvi_stress', 'slope_south_combo', 'treecover_pre_fire_5x5']).issubset(df.columns):
-    df['fire_risk_score_raw'] = (
-        0.25 * df['dry_windy_combo'] +
-        0.25 * df['hot_dry_combo'] +
-        0.15 * df['max_wind'] +
-        0.15 * df['ndvi_stress'] +
-        0.10 * df['slope_south_combo'] +
-        0.10 * df['treecover_pre_fire_5x5']
+    # === 12. Save the final dataset ===
+    df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    print(f"Feature engineering complete. Saved to '{output_path}'")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Run the feature engineering pipeline for wildfire data.")
+    parser.add_argument(
+        '--input',
+        type=str,
+        default="gangwon_fire_dem_slope_aspect_window.csv",
+        help="Path to the input CSV file."
     )
-    df['fire_risk_score'] = (df['fire_risk_score_raw'] - df['fire_risk_score_raw'].min()) / (df['fire_risk_score_raw'].max() - df['fire_risk_score_raw'].min() + EPS)
+    parser.add_argument(
+        '--output',
+        type=str,
+        default="final_merged_feature_engineered.csv",
+        help="Path to save the output CSV file."
+    )
+    args = parser.parse_args()
 
-# === 11. 계절성 파생 + fire_date 삭제 ===
-try:
-    if 'fire_date' in df.columns:
-        df['fire_month'] = pd.to_datetime(df['fire_date']).dt.month
-        df['is_spring'] = df['fire_month'].isin([3,4,5]).astype(int)
-        df['is_autumn'] = df['fire_month'].isin([9,10,11]).astype(int)
-        df = df.drop(columns=['fire_date'])
-except Exception as e:
-    print("계절성 파생 에러:", e)
-
-# === 12. 시계열 급변 Feature ===
-try:
-    if set(['WS10M_0h','WS10M_12h']).issubset(df.columns):
-        df['wind_change'] = df['WS10M_12h'] - df['WS10M_0h']
-    if set(['T2M_0h','T2M_12h']).issubset(df.columns):
-        df['temp_change'] = df['T2M_12h'] - df['T2M_0h']
-    if set(['RH2M_0h','RH2M_12h']).issubset(df.columns):
-        df['humid_change'] = df['RH2M_12h'] - df['RH2M_0h']
-except Exception as e:
-    print("시계열 급변 에러:", e)
-
-# === 13. 이상치/경계치 플래그 ===
-df['high_wind_flag'] = (df.get('max_wind', 0) > 7).astype(int)
-df['low_humidity_flag'] = (df.get('min_humidity', 100) < 30).astype(int)
-df['extreme_hot_flag'] = (df.get('max_temp', 0) > 33).astype(int)
-
-# === 14. FWI 계산 ===
-try:
-    def safe_fwi_calc(row):
-        try:
-            T = row.get('T2M_0h', np.nan)
-            RH = row.get('RH2M_0h', np.nan)
-            W = row.get('WS10M_0h', np.nan)
-            P = row.get('PRECTOTCORR_0h', 0)
-            month = row.get('fire_month', 6)  # 이미 파생된 fire_month 사용
-            res = fwi_calc(T=T, RH=RH, W=W, P=P, month=month, FFMC0=85, DMC0=6, DC0=15)
-            return res.get('FWI', np.nan)
-        except Exception:
-            return np.nan
-
-    df['fwi_0h'] = df.apply(safe_fwi_calc, axis=1)
-
-    def mean_fwi(row):
-        vals = []
-        for h in [0,3,6,9,12]:
-            try:
-                T = row.get(f'T2M_{h}h', np.nan)
-                RH = row.get(f'RH2M_{h}h', np.nan)
-                W = row.get(f'WS10M_{h}h', np.nan)
-                P = row.get(f'PRECTOTCORR_{h}h', 0)
-                month = row.get('fire_month', 6)
-                res = fwi_calc(T=T, RH=RH, W=W, P=P, month=month, FFMC0=85, DMC0=6, DC0=15)
-                fwi = res.get('FWI', np.nan)
-                if not np.isnan(fwi):
-                    vals.append(fwi)
-            except: continue
-        return np.mean(vals) if vals else np.nan
-
-    df['fwi_mean_0_12h'] = df.apply(mean_fwi, axis=1)
-
-except ImportError:
-    print("pyfwi 라이브러리 없음! FWI Proxy로 대체")
-    df['fwi_proxy_0h'] = df['T2M_0h'] * df['WS10M_0h'] * (100 - df['RH2M_0h']) / 1000
-    proxy_cols = [f'T2M_{h}h' for h in [0,3,6,9,12] if f'T2M_{h}h' in df.columns]
-    if proxy_cols:
-        fwi_proxy_list = []
-        for h in [0,3,6,9,12]:
-            if f'T2M_{h}h' in df.columns and f'WS10M_{h}h' in df.columns and f'RH2M_{h}h' in df.columns:
-                proxy = df[f'T2M_{h}h'] * df[f'WS10M_{h}h'] * (100 - df[f'RH2M_{h}h']) / 1000
-                fwi_proxy_list.append(proxy)
-        if fwi_proxy_list:
-            df['fwi_proxy_mean'] = np.mean(fwi_proxy_list, axis=0)
-
-# === 15. NaN/Inf 처리 (NaN 유지!) ===
-df = df.replace([np.inf, -np.inf], np.nan)
-# ★ 절대 fillna(0) 쓰지 않음!
-
-# === 16. 저장 ===
-df.to_csv("final_merged_feature_engineered.csv", index=False, encoding="utf-8-sig")
-print("산불 확산 파생 feature 생성 및 저장 완료! → final_merged_feature_engineered.csv")
+    feature_engineer(args.input, args.output)

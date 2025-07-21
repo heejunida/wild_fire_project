@@ -12,27 +12,67 @@ kakao.maps.load(() => {
   kakao.maps.event.addListener(map, 'click', async mouseEvent => {
     const latlng = mouseEvent.latLng;
     const lat = latlng.getLat();
-    const lng = latlng.getLng();
+    const lon = latlng.getLng();
+
+    // 이전에 표시된 마커와 폴리곤이 있다면 제거
+    if (clickMarker) {
+        clickMarker.setMap(null);
+    }
+    if (window.firePolygon) {
+        window.firePolygon.setMap(null);
+    }
+
+    // 클릭한 위치에 마커 표시
+    clickMarker = new kakao.maps.Marker({
+        position: latlng,
+        map: map
+    });
 
     try {
-      const res = await fetch(`/getWeather?lat=${lat}&lng=${lng}`);
-      if (!res.ok) throw new Error("서버 응답 실패");
-      const data = await res.text();
-      console.log("✅ 서블릿 + Python 실행 결과:");
-      console.log(data);
-    } catch (err) {
-      console.error("❌ NASA POWER 데이터 호출 실패:", err);
+        // FirePredictController 서블릿 호출
+        const response = await fetch(`/fire-predict?lat=${lat}&lon=${lon}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const predictionData = await response.json();
+
+        // GeoJSON 데이터를 Kakao Map 폴리곤으로 변환하여 지도에 표시
+        displayFirePrediction(predictionData);
+
+    } catch (error) {
+        console.error("Error fetching fire prediction:", error);
+        alert("산불 예측 데이터를 가져오는 데 실패했습니다.");
+    }
+});
+
+// GeoJSON 데이터를 받아 지도에 폴리곤으로 표시하는 함수
+function displayFirePrediction(geoJsonData) {
+    if (window.firePolygon) {
+        window.firePolygon.setMap(null);
     }
 
-    // 마커 표시
-    if (clickMarker) {
-      clickMarker.setMap(null);
-    }
-    clickMarker = new kakao.maps.Marker({
-      map,
-      position: latlng
+    // GeoJSON의 coordinates를 Kakao.maps.LatLng 객체 배열로 변환
+    const path = geoJsonData.features[0].geometry.coordinates[0].map(coord => new kakao.maps.LatLng(coord[1], coord[0]));
+
+    // 폴리곤 생성
+    window.firePolygon = new kakao.maps.Polygon({
+        path: path,
+        strokeWeight: 3,
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.8,
+        fillColor: '#FF0000',
+        fillOpacity: 0.35
     });
-  });
+
+    // 지도에 폴리곤 표시
+    window.firePolygon.setMap(map);
+
+    // 폴리곤이 보이도록 지도 범위 조정
+    const bounds = new kakao.maps.LatLngBounds();
+    path.forEach(point => bounds.extend(point));
+    map.setBounds(bounds);
+}
+
   document.getElementById("searchBtn").addEventListener("click", async () => {
     const selected = document.getElementById("regionSelect").value;
     if (!selected) {
