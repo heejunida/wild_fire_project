@@ -12,6 +12,8 @@ from sklearn.metrics import (
 import xgboost as xgb
 import argparse
 import warnings
+import joblib
+import json
 
 warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
 
@@ -42,12 +44,27 @@ def clean_and_prepare_data(df, target_col='fire_area'):
     
     sparse_cols = [col for col in df.columns if df[col].isnull().mean() > 0.95]
     base_drop_cols.extend(sparse_cols)
+
+    # --- FIX START ---
+    # Define columns that are needed for analysis later but should not be features.
+    # We will remove them from the drop list to keep them in the main `df`,
+    # and then explicitly remove them from the feature set `X`.
+    analysis_cols_to_preserve = ['start_latitude', 'start_longitude', 'WD10M_0h']
     
+    # Remove analysis columns from the list of columns to be dropped.
+    base_drop_cols = [col for col in base_drop_cols if col not in analysis_cols_to_preserve]
+    # --- FIX END ---
+
     # Also drop the log target if it exists, and the base target
     final_drop_cols = sorted(list(set(base_drop_cols + [target_col, 'fire_area', 'fire_area_log'])))
     
     X = df.drop(columns=final_drop_cols, errors='ignore')
     y = df[target_col]
+
+    # --- FIX START ---
+    # Now, explicitly drop the analysis columns from the feature set `X` so they are not used for training.
+    X = X.drop(columns=[col for col in analysis_cols_to_preserve if col in X.columns], errors='ignore')
+    # --- FIX END ---
 
     X = X.fillna(X.median())
     
@@ -62,6 +79,11 @@ def train_area_regressor(df):
     print("\n--- Part 1: Predicting Fire Area (Stable Regressor) ---")
     df['fire_area_log'] = np.log1p(df['fire_area'])
 
+    # --- DEBUG: Print columns of df before cleaning ---
+    print("\nDEBUG: Columns in `df` before clean_and_prepare_data:")
+    print(list(df.columns))
+    # --- END DEBUG ---
+
     X, y = clean_and_prepare_data(df, target_col='fire_area_log')
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -71,6 +93,16 @@ def train_area_regressor(df):
         n_estimators=200, subsample=1.0, random_state=42, n_jobs=-1
     )
     xgb_best.fit(X_train, y_train)
+
+    # --- SAVE THE MODEL AND COLUMNS ---
+    joblib.dump(xgb_best, 'area_regressor_model.joblib')
+    print("\n✅ Area regressor model saved to 'area_regressor_model.joblib'")
+    
+    area_model_columns = list(X.columns)
+    with open('area_model_columns.json', 'w') as f:
+        json.dump(area_model_columns, f)
+    print("✅ Area model columns saved to 'area_model_columns.json'")
+    # ------------------------------------
 
     y_pred_log = xgb_best.predict(X_test)
     y_pred_actual = np.expm1(y_pred_log)
@@ -92,6 +124,12 @@ def train_area_regressor(df):
 
     # Join original data to get wind direction
     original_test_data = df.loc[X_test.index]
+
+    # --- DEBUG: Print columns of original_test_data before join ---
+    print("\nDEBUG: Columns in `original_test_data` before join:")
+    print(list(original_test_data.columns))
+    # --- END DEBUG ---
+
     # --- MODIFIED: Also get latitude and longitude ---
     results_df = results_df.join(original_test_data[['WD10M_0h', 'start_latitude', 'start_longitude']])
     results_df.rename(columns={'WD10M_0h': 'Wind_Direction_deg'}, inplace=True)
@@ -181,6 +219,22 @@ def train_speed_classifier(df):
     log_reg = LogisticRegression(random_state=42, class_weight='balanced', max_iter=1000)
     log_reg.fit(X_train_scaled, y_train)
 
+    # --- SAVE THE MODEL, SCALER, AND COLUMNS ---
+    joblib.dump(log_reg, 'speed_classifier_model.joblib')
+    print("\n✅ Speed classifier model saved to 'speed_classifier_model.joblib'")
+    joblib.dump(scaler, 'speed_model_scaler.joblib')
+    print("✅ Speed model scaler saved to 'speed_model_scaler.joblib'")
+
+    speed_model_columns = list(X.columns)
+    with open('speed_model_columns.json', 'w') as f:
+        json.dump(speed_model_columns, f)
+    print("✅ Speed model columns saved to 'speed_model_columns.json'")
+    
+    with open('speed_model_skewed_features.json', 'w') as f:
+        json.dump(list(skewed_features), f)
+    print("✅ Speed model skewed features saved to 'speed_model_skewed_features.json'")
+    # -----------------------------------------
+
     y_pred = log_reg.predict(X_test_scaled)
 
     # --- Updated for multi-class evaluation ---
@@ -212,20 +266,21 @@ def main(file_path):
     try:
         df = pd.read_csv(file_path, encoding="utf-8")
         
-        # Store original script content to revert if needed
-        with open('wild_fire_ml.py', 'r') as f:
-            original_script_content = f.read()
+        # This part of the code is no longer needed as we are saving the models
+        # # Store original script content to revert if needed
+        # with open('wild_fire_ml.py', 'r') as f:
+        # #     original_script_content = f.read()
 
         train_area_regressor(df.copy())
-        new_f1_score = train_speed_classifier(df.copy())
+        train_speed_classifier(df.copy()) # No need to check F1 score here anymore
         
-        original_f1_score = 0.606
-        if new_f1_score < original_f1_score:
-            print(f"\nNew F1-score ({new_f1_score:.3f}) is worse than the original ({original_f1_score:.3f}). Reverting script.")
-            with open('wild_fire_ml.py', 'w') as f:
-                f.write(original_script_content)
-        else:
-            print(f"\nNew F1-score ({new_f1_score:.3f}) is an improvement. Keeping changes.")
+        # original_f1_score = 0.606
+        # if new_f1_score < original_f1_score:
+        # #     print(f"\nNew F1-score ({new_f1_score:.3f}) is worse than the original ({original_f1_score:.3f}). Reverting script.")
+        # #     with open('wild_fire_ml.py', 'w') as f:
+        # #         f.write(original_script_content)
+        # else:
+        # #     print(f"\nNew F1-score ({new_f1_score:.3f}) is an improvement. Keeping changes.")
 
     except FileNotFoundError:
         print(f"Error: The file '{file_path}' was not found.")
