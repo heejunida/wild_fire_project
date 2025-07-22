@@ -3,9 +3,13 @@ import numpy as np
 import ee
 import geemap
 import json
+from google.oauth2 import service_account
 
-# GEE 인증/초기화 (서버에서는 1번만 필요, 인증은 직접!)
-ee.Initialize(project='deep-theorem-456805-p2')
+# --- CORRECT AUTHENTICATION FOR SERVERS ---
+CREDENTIALS_FILE = '/Users/heejunida/wild_fire_project/ee-credentials.json'
+SERVICE_ACCOUNT_EMAIL = 'wildfire@arcane-attic-466102-b2.iam.gserviceaccount.com'
+credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT_EMAIL, key_file=CREDENTIALS_FILE)
+ee.Initialize(credentials=credentials, project='arcane-attic-466102-b2')
 
 def get_dem_slope_aspect_stats(lat, lng, window=5, scale=30):
     try:
@@ -25,7 +29,7 @@ def get_dem_slope_aspect_stats(lat, lng, window=5, scale=30):
                 reducer2=ee.Reducer.minMax(), sharedInputs=True
             ),
             geometry=region, scale=scale, maxPixels=1e7
-        )
+        ).getInfo()
         # Slope
         slope_stats = slope.reduceRegion(
             reducer=ee.Reducer.mean().combine(
@@ -34,18 +38,15 @@ def get_dem_slope_aspect_stats(lat, lng, window=5, scale=30):
                 reducer2=ee.Reducer.minMax(), sharedInputs=True
             ),
             geometry=region, scale=scale, maxPixels=1e7
-        )
-        # Aspect (mode, std, north_ratio, south_ratio)
+        ).getInfo()
+        # Aspect
         aspect_img = aspect.clip(region)
         aspect_arr = np.array(
             geemap.ee_to_numpy(aspect_img, region=region, scale=scale).flatten()
         )
         aspect_arr = aspect_arr[~np.isnan(aspect_arr)]
         if aspect_arr.size == 0:
-            aspect_mode = None
-            aspect_std = None
-            north_ratio = None
-            south_ratio = None
+            aspect_mode, aspect_std, north_ratio, south_ratio = None, None, None, None
         else:
             aspect_mode = float(np.bincount(aspect_arr.astype(int)).argmax())
             aspect_std = float(np.std(aspect_arr))
@@ -53,14 +54,14 @@ def get_dem_slope_aspect_stats(lat, lng, window=5, scale=30):
             north_ratio = float(np.sum((aspect_arr >= 315) | (aspect_arr <= 45)) / len(aspect_arr))
 
         res = {
-            "elevation_mean": elev_stats.get("elevation_mean").getInfo() if elev_stats.get("elevation_mean") else None,
-            "elevation_std": elev_stats.get("elevation_stdDev").getInfo() if elev_stats.get("elevation_stdDev") else None,
-            "elevation_min": elev_stats.get("elevation_min").getInfo() if elev_stats.get("elevation_min") else None,
-            "elevation_max": elev_stats.get("elevation_max").getInfo() if elev_stats.get("elevation_max") else None,
-            "slope_mean": slope_stats.get("slope_mean").getInfo() if slope_stats.get("slope_mean") else None,
-            "slope_std": slope_stats.get("slope_stdDev").getInfo() if slope_stats.get("slope_stdDev") else None,
-            "slope_min": slope_stats.get("slope_min").getInfo() if slope_stats.get("slope_min") else None,
-            "slope_max": slope_stats.get("slope_max").getInfo() if slope_stats.get("slope_max") else None,
+            "elevation_mean": elev_stats.get("elevation_mean"),
+            "elevation_std": elev_stats.get("elevation_stdDev"),
+            "elevation_min": elev_stats.get("elevation_min"),
+            "elevation_max": elev_stats.get("elevation_max"),
+            "slope_mean": slope_stats.get("slope_mean"),
+            "slope_std": slope_stats.get("slope_stdDev"),
+            "slope_min": slope_stats.get("slope_min"),
+            "slope_max": slope_stats.get("slope_max"),
             "aspect_mode": aspect_mode,
             "aspect_std": aspect_std,
             "aspect_north_ratio": north_ratio,
@@ -68,7 +69,7 @@ def get_dem_slope_aspect_stats(lat, lng, window=5, scale=30):
         }
         return res
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"GEE processing failed: {str(e)}"}
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

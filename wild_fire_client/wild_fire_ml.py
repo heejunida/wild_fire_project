@@ -123,16 +123,10 @@ def train_area_regressor(df):
     }, index=X_test.index)
 
     # Join original data to get wind direction
-    original_test_data = df.loc[X_test.index]
-
-    # --- DEBUG: Print columns of original_test_data before join ---
-    print("\nDEBUG: Columns in `original_test_data` before join:")
-    print(list(original_test_data.columns))
-    # --- END DEBUG ---
-
-    # --- MODIFIED: Also get latitude and longitude ---
-    results_df = results_df.join(original_test_data[['WD10M_0h', 'start_latitude', 'start_longitude']])
-    results_df.rename(columns={'WD10M_0h': 'Wind_Direction_deg'}, inplace=True)
+    original_test_data = df.loc[X_test.index].copy()
+    results_df['start_latitude'] = original_test_data['start_latitude']
+    results_df['start_longitude'] = original_test_data['start_longitude']
+    results_df['Wind_Direction_deg'] = original_test_data['WD10M_0h']
 
     # Calculate distance (radius) from predicted area
     results_df['Predicted_Distance_m'] = np.sqrt(results_df['Predicted_Area'] * 10000 / np.pi)
@@ -166,6 +160,82 @@ def train_area_regressor(df):
     plt.yticks(range(len(top_indices)), [X.columns[i] for i in top_indices])
     plt.xlabel('Feature Importance')
     plt.tight_layout()
+    plt.show()
+
+
+def degrees_to_cardinal(d):
+    """Converts wind direction in degrees to 8-point cardinal directions."""
+    dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    ix = int(round(d / (360. / len(dirs))))
+    return dirs[ix % len(dirs)]
+
+
+def train_direction_classifier(df):
+    """
+    Trains an XGBoost model to classify the primary direction of fire spread
+    based on the wind direction at ignition.
+    """
+    print("\n--- Part 3: Classifying Fire Spread Direction ---")
+    
+    df_dir = df.dropna(subset=['WD10M_0h']).copy()
+    
+    # Convert degrees to cardinal direction labels
+    df_dir['direction_cardinal'] = df_dir['WD10M_0h'].apply(degrees_to_cardinal)
+    
+    # Convert labels to a categorical type for XGBoost
+    cardinal_map = {label: i for i, label in enumerate(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'])}
+    df_dir['direction_category'] = df_dir['direction_cardinal'].map(cardinal_map)
+
+    print("Created 'direction_category' from 'WD10M_0h'. Class distribution:")
+    print(df_dir['direction_cardinal'].value_counts())
+
+    X, y = clean_and_prepare_data(df_dir, target_col='direction_category')
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+    print("\nTraining XGBoost Classifier for Direction...")
+    xgb_clf = xgb.XGBClassifier(
+        objective='multi:softmax',
+        num_class=len(cardinal_map),
+        use_label_encoder=False,
+        eval_metric='mlogloss',
+        n_estimators=150,
+        learning_rate=0.1,
+        max_depth=5,
+        colsample_bytree=0.8,
+        subsample=0.9,
+        random_state=42,
+        n_jobs=-1
+    )
+    xgb_clf.fit(X_train, y_train)
+
+    # --- SAVE THE MODEL AND COLUMNS ---
+    joblib.dump(xgb_clf, 'direction_classifier_model.joblib')
+    print("\n✅ Direction classifier model saved to 'direction_classifier_model.joblib'")
+    
+    direction_model_columns = list(X.columns)
+    with open('direction_model_columns.json', 'w') as f:
+        json.dump(direction_model_columns, f)
+    print("✅ Direction model columns saved to 'direction_model_columns.json'")
+    # ------------------------------------
+
+    y_pred = xgb_clf.predict(X_test)
+    
+    accuracy = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average='weighted')
+
+    print("\nDirection Model Evaluation:")
+    print(f"Accuracy: {accuracy:.3f}")
+    print(f"Weighted F1-Score: {f1:.3f}")
+
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(8, 7))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='YlGnBu', 
+                xticklabels=cardinal_map.keys(), 
+                yticklabels=cardinal_map.keys())
+    plt.title('Confusion Matrix for Spread Direction')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
     plt.show()
 
 
@@ -273,6 +343,7 @@ def main(file_path):
 
         train_area_regressor(df.copy())
         train_speed_classifier(df.copy()) # No need to check F1 score here anymore
+        train_direction_classifier(df.copy())
         
         # original_f1_score = 0.606
         # if new_f1_score < original_f1_score:

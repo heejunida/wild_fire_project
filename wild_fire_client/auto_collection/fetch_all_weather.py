@@ -57,8 +57,9 @@ def make_precip_features(lat, lng, end_dt, periods=[7,14,30,60,90]):
         precip_dict = fetch_nasa_daily_precip(lat, lng, sdate, dt_str)
         vals = [float(precip_dict.get((end_dt - datetime.timedelta(days=i)).strftime("%Y%m%d"), np.nan)) for i in range(ndays)][::-1]
         arr = np.array(vals, dtype=float)
-        res[f"total_precip_{ndays}d"] = np.nansum(arr)
-        res[f"dry_days_{ndays}d"] = np.sum(arr < 1)
+        # --- FIX: Add the '_start' suffix to match the feature engineering script ---
+        res[f"total_precip_{ndays}d_start"] = float(np.nansum(arr))
+        res[f"dry_days_{ndays}d_start"] = int(np.sum(arr < 1))
     # 연속 무강수일수(최근부터 몇일째 비 안옴, 1mm 미만)
     cons = 0
     for v in arr[::-1]:
@@ -66,7 +67,8 @@ def make_precip_features(lat, lng, end_dt, periods=[7,14,30,60,90]):
             cons += 1
         else:
             break
-    res[f"consecutive_dry_days"] = cons
+    # --- FIX: Add the '_start' suffix ---
+    res[f"consecutive_dry_days_start"] = int(cons)
     return res
 
 def make_time_points(start_dt, end_dt, interval_hours=3):

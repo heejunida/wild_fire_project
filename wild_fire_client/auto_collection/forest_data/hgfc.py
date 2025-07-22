@@ -1,57 +1,53 @@
-import sys
 import ee
+import sys
 import json
+from google.oauth2 import service_account
 
-# 1. GEE 인증 및 초기화 (최초 1회 인증 필요)
-ee.Initialize(project='deep-theorem-456805-p2')
+# --- CORRECT AUTHENTICATION FOR SERVERS ---
+CREDENTIALS_FILE = '/Users/heejunida/wild_fire_project/ee-credentials.json'
+SERVICE_ACCOUNT_EMAIL = 'wildfire@arcane-attic-466102-b2.iam.gserviceaccount.com'
+credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT_EMAIL, key_file=CREDENTIALS_FILE)
+ee.Initialize(credentials=credentials, project='arcane-attic-466102-b2')
 
-def get_treecover_pre_fire(lat, lng, fire_year, window=5, scale=30):
+def get_hanssen_treecover(lat, lng, year, window=5, scale=30):
     try:
-        lat = float(lat)
-        lng = float(lng)
-        fire_year = int(fire_year)
+        pt = ee.Geometry.Point(float(lng), float(lat))
+        offset = (window // 2) * scale
+        region = pt.buffer(offset).bounds()
 
-        # 중심점에서 5x5 픽셀(약 150m x 150m) window
-        offset = (window // 2) * scale  # 예: 2*30=60m
-        pt = ee.Geometry.Point(lng, lat)
-        grid = pt.buffer(offset).bounds()
+        # Hansen Global Forest Change v1.11 (2000-2023)
+        gfc = ee.Image('UMD/hansen/global_forest_change_2023_v1_11')
+        
+        # Get tree cover for the specified year
+        treecover2000 = gfc.select('treecover2000')
+        lossyear = gfc.select('lossyear')
+        
+        loss_mask = lossyear.lte(int(year) - 2000)
+        
+        treecover_at_year = treecover2000.where(loss_mask, 0)
 
-        # Hansen Global Forest Change dataset (v1.12, 2024)
-        gfc_image = ee.Image("UMD/hansen/global_forest_change_2024_v1_12")
-
-        # 1. 해당 화재 발생년도 시점의 “실제 숲 존재여부” mask
-        forest_present_mask = gfc_image.select('lossyear').eq(0).Or(
-            gfc_image.select('lossyear').add(2000).gte(fire_year)
-        )
-        # 2. mask 적용 후 window 내 평균 산림률
-        treecover_masked = gfc_image.select('treecover2000').updateMask(forest_present_mask)
-        combined_reducer = ee.Reducer.mean().combine(ee.Reducer.count(), sharedInputs=True)
-        region_stats = treecover_masked.reduceRegion(
-            reducer=combined_reducer,
-            geometry=grid,
+        stats = treecover_at_year.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=region,
             scale=scale,
-            maxPixels=1e8
-        ).getInfo()
+            maxPixels=1e7
+        )
+        
+        mean_cover = stats.get('treecover2000').getInfo()
+        
+        return {"treecover_pre_fire_5x5": mean_cover if mean_cover is not None else 0}
 
-        current_treecover = region_stats.get('treecover2000_mean')
-        current_pixel_count = region_stats.get('treecover2000_count')
-
-        result = {
-            "treecover_pre_fire_5x5": float(current_treecover) if current_treecover is not None else None,
-            "treecover_pixel_count": int(current_pixel_count) if current_pixel_count is not None else 0,
-            "window_m": scale * window,
-            "fire_year": fire_year
-        }
-        return result
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"GEE Tree Cover processing failed: {str(e)}"}
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
-        print(json.dumps({"error": "Usage: python fetch_treecover.py lat lng fire_year"}))
+        print(json.dumps({"error": "Usage: python hgfc.py lat lng YYYY"}))
         sys.exit(1)
-    lat = sys.argv[1]
-    lng = sys.argv[2]
-    fire_year = sys.argv[3]  # 반드시 YYYY형식(예: 2021)
-    result = get_treecover_pre_fire(lat, lng, fire_year)
-    print(json.dumps(result, ensure_ascii=False))
+        
+    lat_in = float(sys.argv[1])
+    lng_in = float(sys.argv[2])
+    year_in = sys.argv[3]
+    
+    result = get_hanssen_treecover(lat_in, lng_in, year_in)
+    print(json.dumps(result))

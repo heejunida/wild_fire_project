@@ -1,48 +1,41 @@
-import sys
 import ee
+import sys
 import json
-from datetime import datetime, timedelta
+from google.oauth2 import service_account
 
-# 1. 인증 & 초기화
-ee.Initialize(project='deep-theorem-456805-p2')
+# --- CORRECT AUTHENTICATION FOR SERVERS ---
+CREDENTIALS_FILE = '/Users/heejunida/wild_fire_project/ee-credentials.json'
+SERVICE_ACCOUNT_EMAIL = 'wildfire@arcane-attic-466102-b2.iam.gserviceaccount.com'
+credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT_EMAIL, key_file=CREDENTIALS_FILE)
+ee.Initialize(credentials=credentials, project='arcane-attic-466102-b2')
 
-def fetch_ndvi(lat, lng, fire_date):
+def get_modis_ndvi_value(lat, lng, date_str):
     try:
-        fire_dt = datetime.strptime(fire_date, '%Y-%m-%d')
-        # 30일 전 ~ 1일 전
-        start_date = (fire_dt - timedelta(days=30)).strftime('%Y-%m-%d')
-        end_date = (fire_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        date = ee.Date(date_str)
         pt = ee.Geometry.Point(float(lng), float(lat))
-        ndvi_ic = ee.ImageCollection("MODIS/061/MOD13Q1") \
-            .filterDate(start_date, end_date) \
-            .filterBounds(pt) \
-            .sort('system:time_start', False)
-        image = ndvi_ic.first()
-        if image is not None:
-            ndvi_val = image.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=pt,
-                scale=250
-            ).get('NDVI').getInfo()
-            if ndvi_val is not None:
-                ndvi = float(ndvi_val) / 10000.0
-            else:
-                ndvi = None
-        else:
-            ndvi = None
+        
+        modis_ndvi = ee.ImageCollection('MODIS/061/MOD13A2').filterDate(
+            date.advance(-1, 'month'), date.advance(1, 'month')
+        ).select('NDVI').mean()
 
-        result = {"ndvi_before": ndvi, "lat": lat, "lng": lng, "fire_date": fire_date}
-        print(json.dumps(result, ensure_ascii=False))
-
+        scale = 1000  # MODIS 1km resolution
+        ndvi_value = modis_ndvi.sample(pt, scale).first().get('NDVI').getInfo()
+        
+        # MODIS NDVI is scaled by 10000
+        return {"ndvi_before": ndvi_value * 0.0001 if ndvi_value is not None else None}
+        
     except Exception as e:
-        result = {"ndvi_before": None, "error": str(e), "lat": lat, "lng": lng, "fire_date": fire_date}
-        print(json.dumps(result, ensure_ascii=False))
+        # Return a structured error if GEE fails
+        return {"error": f"GEE NDVI processing failed: {str(e)}"}
 
-# ---- main entrypoint ----
 if __name__ == "__main__":
-    # sys.argv[1]=lat, [2]=lng, [3]=fire_date
-    if len(sys.argv) != 4:
-        print(json.dumps({"error": "필수 인자: lat lng fire_date(YYYY-MM-DD)"}))
+    if len(sys.argv) < 4:
+        print(json.dumps({"error": "Usage: python ndvi_modis.py lat lng YYYY-MM-DD"}))
         sys.exit(1)
-    lat, lng, fire_date = sys.argv[1], sys.argv[2], sys.argv[3]
-    fetch_ndvi(lat, lng, fire_date)
+        
+    lat_in = float(sys.argv[1])
+    lng_in = float(sys.argv[2])
+    date_in = sys.argv[3]
+    
+    result = get_modis_ndvi_value(lat_in, lng_in, date_in)
+    print(json.dumps(result))

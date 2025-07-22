@@ -6,30 +6,33 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 FIRE_CSV = "gangwon_fire_ml_input.csv"
-OUT_CSV = "fire_weather_merged_final.csv"
-API_SLEEP = 0.5
-MAX_WORKERS = 7
+OUT_CSV = "fire_weather_start_only.csv"  # Output file changed
+API_SLEEP = 0.1  # Can be faster as we make fewer requests per fire
+MAX_WORKERS = 10
 
-# 전역 캐시
+# Global cache
 weather_cache = {}
 precip_cache = {}
 
-# NASA API (hourly weather)
 def fetch_nasa_hourly_weather(lat, lng, yyyymmdd, hour_str, max_retry=3):
+    """Fetches hourly weather data for a single point in time from NASA POWER."""
     cache_key = (lat, lng, yyyymmdd, hour_str)
     if cache_key in weather_cache:
         return weather_cache[cache_key]
+    
     url = (
         f"https://power.larc.nasa.gov/api/temporal/hourly/point?"
         "parameters=T2M,RH2M,WS2M,WD2M,PRECTOTCORR,PS,ALLSKY_SFC_SW_DWN,WS10M,WD10M"
         f"&community=RE&longitude={lng}&latitude={lat}&start={yyyymmdd}&end={yyyymmdd}&format=JSON"
     )
+    
     for attempt in range(max_retry):
         try:
-            res = requests.get(url, timeout=30)
+            res = requests.get(url, timeout=20)
             res.raise_for_status()
             data = res.json().get("properties", {}).get("parameter", {})
             hour_key = f"{yyyymmdd}{hour_str.zfill(2)}"
+            
             result = {
                 "T2M": data.get("T2M", {}).get(hour_key, np.nan),
                 "RH2M": data.get("RH2M", {}).get(hour_key, np.nan),
@@ -44,109 +47,134 @@ def fetch_nasa_hourly_weather(lat, lng, yyyymmdd, hour_str, max_retry=3):
             weather_cache[cache_key] = result
             return result
         except Exception as e:
-            print(f"NASA API 실패 (시도 {attempt+1}/{max_retry}): {e}")
-            time.sleep(3)
+            print(f"NASA API failed (Attempt {attempt+1}/{max_retry}): {e}")
+            time.sleep(2)
+            
+    # Return NaN dict if all retries fail
     weather_cache[cache_key] = {k: np.nan for k in ["T2M","RH2M","WS2M","WD2M","WS10M","WD10M","PRECTOTCORR","PS","ALLSKY_SFC_SW_DWN"]}
     return weather_cache[cache_key]
 
-# 일별 강수량 가져오기 (최대 100일까지)
 def fetch_nasa_daily_precip(lat, lng, start_date, end_date, max_retry=3):
+    """Fetches daily precipitation data for a date range."""
     cache_key = (lat, lng, start_date, end_date)
     if cache_key in precip_cache:
         return precip_cache[cache_key]
+        
     url = (
         f"https://power.larc.nasa.gov/api/temporal/daily/point?"
         f"parameters=PRECTOTCORR&community=RE&longitude={lng}&latitude={lat}"
         f"&start={start_date}&end={end_date}&format=JSON"
     )
+    
     for attempt in range(max_retry):
         try:
-            res = requests.get(url, timeout=30)
+            res = requests.get(url, timeout=20)
             res.raise_for_status()
             data = res.json().get("properties", {}).get("parameter", {}).get("PRECTOTCORR", {})
-            # 날짜별 dict {yyyymmdd: 강수량}
             precip_cache[cache_key] = data
             return data
         except Exception as e:
-            print(f"NASA 일별강수 API 실패 (시도 {attempt+1}/{max_retry}): {e}")
-            time.sleep(3)
+            print(f"NASA Daily Precip API failed (Attempt {attempt+1}/{max_retry}): {e}")
+            time.sleep(2)
+            
     precip_cache[cache_key] = {}
     return {}
 
-def hour_from_timestr(timestr):
-    if pd.isnull(timestr):
+def get_start_hour(timestr):
+    """Extracts the hour from a time string, defaulting to 12 if invalid."""
+    if pd.isnull(timestr) or not isinstance(timestr, str):
         return 12
     try:
-        return int(str(timestr).split(":")[0])
-    except:
+        return int(timestr.split(":")[0])
+    except (ValueError, IndexError):
         return 12
 
-def make_time_points(start_dt, end_dt):
-    points = [start_dt]  # start 반드시 포함
-    curr_dt = start_dt
-    while True:
-        curr_dt += datetime.timedelta(hours=3)
-        if curr_dt >= end_dt:
-            break
-        points.append(curr_dt)
-    if points[-1] != end_dt:
-        points.append(end_dt)  # end도 반드시 포함
-    return points
+def calculate_precip_features(lat, lng, dt, periods=[7, 14, 30, 60, 90]):
+    """Calculates cumulative precipitation and dry day features."""
+    features = {}
+    end_date_str = dt.strftime("%Y%m%d")
+    
+    # Fetch data for the longest period once
+    longest_period = max(periods)
+    start_date_str = (dt - datetime.timedelta(days=longest_period - 1)).strftime("%Y%m%d")
+    precip_data = fetch_nasa_daily_precip(lat, lng, start_date_str, end_date_str)
+    
+    if not precip_data:
+        # If API fails, return NaN for all features
+        for p in periods:
+            features[f"total_precip_{p}d_start"] = np.nan
+            features[f"dry_days_{p}d_start"] = np.nan
+        features["consecutive_dry_days_start"] = np.nan
+        return features
 
-# 강수 피처 구하기
-def make_precip_features(lat, lng, dt, periods=[7,14,30,60,90]):
-    res = {}
-    dt_str = dt.strftime("%Y%m%d")
-    for ndays in periods:
-        sdate = (dt - datetime.timedelta(days=ndays-1)).strftime("%Y%m%d")
-        precip_dict = fetch_nasa_daily_precip(lat, lng, sdate, dt_str)
-        vals = [float(precip_dict.get((dt - datetime.timedelta(days=i)).strftime("%Y%m%d"), np.nan)) for i in range(ndays)][::-1]
-        arr = np.array(vals, dtype=float)
-        # 누적강수량
-        res[f"total_precip_{ndays}d"] = np.nansum(arr)
-        # 무강수일수(1mm 미만)
-        res[f"dry_days_{ndays}d"] = np.sum(arr < 1)
-    # 연속 무강수일수(최근부터 몇일째 비 안옴, 1mm 미만)
-    cons = 0
-    for v in arr[::-1]:
-        if np.isnan(v) or v < 1:
-            cons += 1
+    # Create a complete date-indexed series
+    all_days = pd.to_datetime(list(precip_data.keys()), format='%Y%m%d')
+    precip_series = pd.Series(precip_data.values(), index=all_days).sort_index()
+    
+    # Calculate features for each period
+    for p in periods:
+        start_date_period = dt - datetime.timedelta(days=p - 1)
+        period_data = precip_series.loc[start_date_period:dt]
+        
+        features[f"total_precip_{p}d_start"] = period_data.sum()
+        features[f"dry_days_{p}d_start"] = (period_data < 1).sum()
+
+    # Calculate consecutive dry days
+    consecutive_dry_days = 0
+    for i in range(len(precip_series) - 1, -1, -1):
+        if precip_series.iloc[i] < 1:
+            consecutive_dry_days += 1
         else:
             break
-    res[f"consecutive_dry_days"] = cons
-    return res
+    features["consecutive_dry_days_start"] = consecutive_dry_days
+    
+    return features
 
-def single_fire_weather_job(fire_row, idx):
+def process_single_fire(fire_row):
+    """
+    Processes one fire event to get start-time weather and precipitation features.
+    """
     lat = fire_row['lat']
     lng = fire_row['lng']
-    start_dt = datetime.datetime(int(fire_row['startyear']), int(fire_row['startmonth']), int(fire_row['startday']), hour_from_timestr(fire_row['starttime']))
-    end_dt = datetime.datetime(int(fire_row['endyear']), int(fire_row['endmonth']), int(fire_row['endday']), hour_from_timestr(fire_row['endtime']))
-    duration = (end_dt - start_dt).total_seconds() / 3600
-
-    time_points = make_time_points(start_dt, end_dt)
-    time_tags = [f"{int((dt-start_dt).total_seconds()//3600)}h" if i!=len(time_points)-1 else "end"
-                 for i, dt in enumerate(time_points)]
     
+    start_hour = get_start_hour(fire_row['starttime'])
+    start_dt = datetime.datetime(
+        int(fire_row['startyear']), 
+        int(fire_row['startmonth']), 
+        int(fire_row['startday']), 
+        start_hour
+    )
+    
+    end_hour = get_start_hour(fire_row['endtime'])
+    end_dt = datetime.datetime(
+        int(fire_row['endyear']), 
+        int(fire_row['endmonth']), 
+        int(fire_row['endday']), 
+        end_hour
+    )
+    
+    # Calculate fire duration
+    duration_hours = (end_dt - start_dt).total_seconds() / 3600
+    
+    # --- 1. Get weather only at the start time (t=0) ---
+    start_yyyymmdd = start_dt.strftime("%Y%m%d")
+    start_hour_str = start_dt.strftime("%H")
+    
+    weather_at_start = fetch_nasa_hourly_weather(lat, lng, start_yyyymmdd, start_hour_str)
+    
+    # Prefix weather keys with `_0h` to match ML script's expectations
+    weather_features = {f"{key}_0h": val for key, val in weather_at_start.items()}
+
+    # --- 2. Calculate precipitation features based on the start date ---
+    precip_features = calculate_precip_features(lat, lng, start_dt)
+    
+    # --- 3. Combine all data into a single dictionary ---
     row_data = fire_row.to_dict()
-
-    # --- start 기준 누적강수/무강수일만 계산 ---
-    precip_feats = make_precip_features(lat, lng, start_dt)
-    for k, v in precip_feats.items():
-        row_data[f"{k}_start"] = v
-
-    # --- 각 시점별 기후 + datetime만 ---
-    for tag, dt in zip(time_tags, time_points):
-        yyyymmdd = dt.strftime("%Y%m%d")
-        hour = dt.strftime("%H")
-        weather = fetch_nasa_hourly_weather(lat, lng, yyyymmdd, hour)
-        for k, v in weather.items():
-            try:
-                row_data[f"{k}_{tag}"] = float(v)
-            except:
-                row_data[f"{k}_{tag}"] = np.nan
-        row_data[f"dt_{tag}"] = dt.strftime("%Y-%m-%d %H:%M")
-        time.sleep(API_SLEEP)
-    row_data["fire_duration_hours"] = duration
+    row_data.update(weather_features)
+    row_data.update(precip_features)
+    row_data["fire_duration_hours"] = duration_hours if duration_hours > 0 else 0
+    
+    time.sleep(API_SLEEP)
     return row_data
 
 if __name__ == "__main__":
@@ -154,14 +182,20 @@ if __name__ == "__main__":
     result_rows = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(single_fire_weather_job, row, idx) for idx, row in df.iterrows()]
-        for i, f in enumerate(as_completed(futures)):
+        # Create a list of futures
+        futures = [executor.submit(process_single_fire, row) for _, row in df.iterrows()]
+        
+        # Process futures as they complete
+        for i, future in enumerate(as_completed(futures)):
             try:
-                res = f.result()
-                result_rows.append(res)
-                print(f"[{i+1}/{len(df)}] 처리 완료: {res.get('fire_date', '')}")
+                result = future.result()
+                result_rows.append(result)
+                print(f"[{i+1}/{len(df)}] Processed fire event.")
             except Exception as e:
-                print(f"[Error] {i+1}번째 row 실패: {e}")
+                # It's useful to know which row failed, though we don't have its index directly
+                print(f"Error processing a fire event: {e}")
 
-    pd.DataFrame(result_rows).to_csv(OUT_CSV, index=False, encoding="utf-8-sig")
-    print(f"\n최종 저장 완료: {OUT_CSV}")
+    # Create DataFrame and save to new CSV
+    final_df = pd.DataFrame(result_rows)
+    final_df.to_csv(OUT_CSV, index=False, encoding="utf-8-sig")
+    print(f"\nProcessing complete. Data saved to: {OUT_CSV}")
