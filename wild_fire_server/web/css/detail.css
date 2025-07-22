@@ -362,3 +362,39 @@ body.shifted {
   font-size: 13px;
   opacity: 0.8;
 }
+
+/* --- NEW: Styles for the custom info overlay on the map --- */
+.info-overlay {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px 15px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    color: #333;
+    min-width: 240px;
+}
+.info-overlay h4 {
+    margin: 0 0 8px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+    font-size: 16px;
+    color: #000;
+    font-weight: bold;
+}
+.info-overlay ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.info-overlay li {
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+.info-overlay li strong {
+    display: inline-block;
+    width: 110px;
+    color: #555;
+    font-weight: 500;
+}

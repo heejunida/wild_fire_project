@@ -46,6 +46,26 @@ def feature_engineer_from_json(input_json):
     # === 1. Load Data from JSON into a DataFrame ===
     df = pd.DataFrame([input_json])
 
+    # === NEW: Pre-processing to handle nested weather data from the Java pipeline ===
+    # Check if the raw, nested weather data exists.
+    if 'weather_timeseries' in df.columns and isinstance(df.iloc[0]['weather_timeseries'], list):
+        # Extract the list of weather data points
+        weather_list = df.iloc[0]['weather_timeseries']
+        
+        # "Flatten" the list into separate columns
+        for i, weather_point in enumerate(weather_list):
+            # Assuming a 3-hour interval as per the calling script's logic
+            time_tag = f"{i * 3}h"
+            weather_point.pop('dt', None)  # Remove non-feature datetime string
+            for key, value in weather_point.items():
+                df[f"{key}_{time_tag}"] = value
+        
+        df = df.drop(columns=['weather_timeseries'])
+
+    # Use 'start_dt' from the weather script to create 'fire_date' if it doesn't exist
+    if 'fire_date' not in df.columns and 'start_dt' in df.columns:
+        df['fire_date'] = pd.to_datetime(df['start_dt']).dt.strftime('%Y-%m-%d')
+
     # === 2. Handle Missing Weather Data (0.0 -> NaN) ===
     weather_cols = [col for col in df.columns if any(x in col for x in ['T2M_', 'RH2M_', 'WS2M_', 'WS10M_', 'PRECTOTCORR_', 'WD2M_', 'WD10M_'])]
     for col in weather_cols:
@@ -117,17 +137,14 @@ def feature_engineer_from_json(input_json):
     df['extreme_hot_flag'] = (df['max_temp_0_12h'] > 33).astype(int) if 'max_temp_0_12h' in df.columns else 0
 
     # === 7. Handle NaN/Inf and Convert to Dictionary ===
+    # The dataframe `df` now contains the original, weather, and all engineered features.
+    # We just need to fill any remaining NaN/Inf values and convert to a dictionary.
     df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.fillna(0) # Fill any remaining NaNs with 0
+    df = df.fillna(0) 
     
-    # Convert the single row DataFrame to a dictionary
-    result_dict = df.to_dict('records')[0]
-
-    # --- FIX: Ensure original input features are preserved ---
-    # The feature engineering script might only add new columns. We need to merge
-    # the original data with the new features to ensure a complete feature set.
-    final_dict = input_json.copy()  # Start with the original input
-    final_dict.update(result_dict) # Add/overwrite with engineered features
+    # Convert the single row DataFrame to the final dictionary. This is the single
+    # source of truth for all features.
+    final_dict = df.to_dict('records')[0]
     
     return final_dict
 

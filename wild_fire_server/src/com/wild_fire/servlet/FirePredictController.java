@@ -21,16 +21,19 @@ public class FirePredictController extends HttpServlet {
         // 1. Extract parameters
         String lat = request.getParameter("lat");
         String lng = request.getParameter("lng");
-        String fireDateStr = request.getParameter("fireDate");
-        if (lat == null || lng == null || fireDateStr == null) {
+        String fireDateStr = request.getParameter("fireDate"); // Use the date from the request
+
+        if (lat == null || lng == null || fireDateStr == null) { // Restore fireDateStr check
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             response.getWriter().write("{\"error\": \"Missing parameters\"}");
             return;
         }
         System.out.println("Parameters: lat=" + lat + ", lng=" + lng + ", fireDate=" + fireDateStr);
 
+        // --- Use the provided fireDate from the request ---
         DateTimeFormatter yyyyMMddFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         LocalDate fireDate = LocalDate.parse(fireDateStr, yyyyMMddFormatter);
+        
         LocalDate weatherStartDate = fireDate.minusDays(1);
         DateTimeFormatter yyyymmddFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
         String startDate = weatherStartDate.format(yyyymmddFormatter);

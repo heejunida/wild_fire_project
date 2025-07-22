@@ -55,8 +55,8 @@ def clean_and_prepare_data(df, target_col='fire_area'):
     base_drop_cols = [col for col in base_drop_cols if col not in analysis_cols_to_preserve]
     # --- FIX END ---
 
-    # Also drop the log target if it exists, and the base target
-    final_drop_cols = sorted(list(set(base_drop_cols + [target_col, 'fire_area', 'fire_area_log'])))
+    # Also drop the log target if it exists, the base target, and the leaky spread_rate column
+    final_drop_cols = sorted(list(set(base_drop_cols + [target_col, 'fire_area', 'fire_area_log', 'spread_rate'])))
     
     X = df.drop(columns=final_drop_cols, errors='ignore')
     y = df[target_col]
@@ -241,17 +241,16 @@ def train_direction_classifier(df):
 
 def train_speed_classifier(df):
     """
-    Trains and evaluates a Logistic Regression model to classify fire spread speed
+    Trains and evaluates an XGBoost model to classify fire spread speed
     into three categories: Low, Medium, and High.
     """
-    print("\n--- Part 2: Classifying Fire Spread Speed (3 Categories) ---")
+    print("\n--- Part 2: Classifying Fire Spread Speed (XGBoost) ---")
     
     df_speed = df[df['fire_duration_hours'] > 0].copy()
     df_speed['spread_rate'] = df_speed['fire_area'] / df_speed['fire_duration_hours']
     
-    # --- New: Define data-driven thresholds for 3 categories ---
-    low_threshold = 0.06  # Based on the median (50th percentile)
-    high_threshold = 0.35 # Based on the 90th percentile
+    low_threshold = 0.06
+    high_threshold = 0.35
     
     def assign_speed_category(rate):
         if rate < low_threshold:
@@ -268,46 +267,48 @@ def train_speed_classifier(df):
 
     X, y = clean_and_prepare_data(df_speed, target_col='speed_category')
 
-    # Apply symmetric log transformation for skewed features
-    numeric_cols = X.select_dtypes(include=np.number).columns
-    skewed_cols = X[numeric_cols].skew().abs() > 0.75
-    skewed_features = skewed_cols[skewed_cols].index
-    
-    print(f"\nApplying symmetric log transformation to {len(skewed_features)} skewed features.")
-    for col in skewed_features:
-        X[col] = np.sign(X[col]) * np.log1p(np.abs(X[col]))
-
-    X = X.fillna(X.median())
-
+    # No scaling or transformation needed for XGBoost
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    print("\nTraining XGBoost Classifier for 3 classes...")
+    # Use settings optimized for multi-class classification
+    xgb_speed_clf = xgb.XGBClassifier(
+        objective='multi:softmax',
+        num_class=3,
+        use_label_encoder=False,
+        eval_metric='mlogloss',
+        n_estimators=200,
+        learning_rate=0.1,
+        max_depth=6,
+        colsample_bytree=0.8,
+        subsample=0.8,
+        random_state=42,
+        n_jobs=-1
+    )
+    xgb_speed_clf.fit(X_train, y_train)
 
-    print("\nTraining Logistic Regression Classifier for 3 classes...")
-    log_reg = LogisticRegression(random_state=42, class_weight='balanced', max_iter=1000)
-    log_reg.fit(X_train_scaled, y_train)
-
-    # --- SAVE THE MODEL, SCALER, AND COLUMNS ---
-    joblib.dump(log_reg, 'speed_classifier_model.joblib')
+    # --- SAVE THE MODEL AND COLUMNS ---
+    joblib.dump(xgb_speed_clf, 'speed_classifier_model.joblib')
     print("\n✅ Speed classifier model saved to 'speed_classifier_model.joblib'")
-    joblib.dump(scaler, 'speed_model_scaler.joblib')
-    print("✅ Speed model scaler saved to 'speed_model_scaler.joblib'")
+    
+    # The scaler and skewed features files are no longer needed.
+    # We can remove them to avoid confusion.
+    import os
+    if os.path.exists('speed_model_scaler.joblib'):
+        os.remove('speed_model_scaler.joblib')
+        print("✅ Removed obsolete 'speed_model_scaler.joblib'")
+    if os.path.exists('speed_model_skewed_features.json'):
+        os.remove('speed_model_skewed_features.json')
+        print("✅ Removed obsolete 'speed_model_skewed_features.json'")
 
     speed_model_columns = list(X.columns)
     with open('speed_model_columns.json', 'w') as f:
         json.dump(speed_model_columns, f)
     print("✅ Speed model columns saved to 'speed_model_columns.json'")
-    
-    with open('speed_model_skewed_features.json', 'w') as f:
-        json.dump(list(skewed_features), f)
-    print("✅ Speed model skewed features saved to 'speed_model_skewed_features.json'")
     # -----------------------------------------
 
-    y_pred = log_reg.predict(X_test_scaled)
+    y_pred = xgb_speed_clf.predict(X_test)
 
-    # --- Updated for multi-class evaluation ---
     accuracy = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred, average='weighted')
     recall = recall_score(y_test, y_pred, average='weighted')

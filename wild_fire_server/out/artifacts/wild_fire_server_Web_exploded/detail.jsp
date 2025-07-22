@@ -86,7 +86,7 @@
         </div>
     </footer>
 
-    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce&libraries=geometry"></script>
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/chart.js"></script>
     <script src="js/detail.js"></script>

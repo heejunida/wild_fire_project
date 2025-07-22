@@ -5,7 +5,7 @@ import time
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-FIRE_CSV = "gangwon_fire_ml_input.csv"
+FIRE_CSV = "/Users/heejunida/wild_fire_project/wild_fire_client/gangwon_fire_ml_input.csv"
 OUT_CSV = "fire_weather_start_only.csv"  # Output file changed
 API_SLEEP = 0.1  # Can be faster as we make fewer requests per fire
 MAX_WORKERS = 10

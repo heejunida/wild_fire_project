@@ -21,6 +21,7 @@ function initMap() {
 
     let clickMarker = null;
     let firePolygon = null;
+    let infoOverlay = null;
     let searchMarkers = [];
     const selectedRegions = [];
 
@@ -29,15 +30,19 @@ function initMap() {
         const latlng = mouseEvent.latLng;
         if (clickMarker) clickMarker.setMap(null);
         if (firePolygon) firePolygon.setMap(null);
+        if (infoOverlay) infoOverlay.setMap(null); // Clear previous overlay
 
         clickMarker = new kakao.maps.Marker({ position: latlng, map: map });
 
         try {
-            // --- DURATION LOGIC ---
-            const duration = document.getElementById("durationSelect").value;
+            // --- FIX: Use today's date minus 4 days to ensure data availability ---
             const now = new Date();
-            const fireDate = now.toISOString().slice(0, 10); // "YYYY-MM-DD"
-            const fireTime = now.toTimeString().slice(0, 5).replace(':', ''); // "HHMM"
+            now.setDate(now.getDate() - 4); // Go back 4 days
+            const fireDate = now.toISOString().slice(0, 10); // Format as "YYYY-MM-DD"
+            
+            // The fireTime and duration are sent but not critical for the current prediction model
+            const fireTime = "1200"; // Use a consistent midday time
+            const duration = document.getElementById("durationSelect").value;
 
             const response = await fetch(`/fire-predict?lat=${latlng.getLat()}&lng=${latlng.getLng()}&fireDate=${fireDate}&fireTime=${fireTime}&duration=${duration}`);
             
@@ -50,6 +55,7 @@ function initMap() {
             console.log("✅ Prediction data received from servlet:", prediction);
             
             firePolygon = displayFirePrediction(map, latlng.getLat(), latlng.getLng(), prediction);
+            infoOverlay = displayInfoOverlay(map, latlng, prediction); // Create and display the info overlay
 
             const distanceData = formatDataForDistanceChart(prediction, parseInt(duration));
             const speedData = formatDataForSpeedChart(prediction);
@@ -132,31 +138,61 @@ function initMap() {
 }
 
 function displayFirePrediction(map, centerLat, centerLon, predictionData) {
-    const { predicted_area_ha, wind_direction_deg } = predictionData;
-    const radius_m = Math.sqrt(predicted_area_ha * 10000 / Math.PI);
+    const { predicted_distance_m, wind_direction_deg, predicted_speed_category } = predictionData;
+
+    // --- NEW: Color mapping based on speed category ---
+    const speedColors = {
+        0: { stroke: '#FFD700', fill: '#FFFFE0' }, // Low: Yellow
+        1: { stroke: '#FFA500', fill: '#FFDAB9' }, // Medium: Orange
+        2: { stroke: '#FF0000', fill: '#FFC0CB' }  // High: Red
+    };
+    const colors = speedColors[predicted_speed_category] || speedColors[0]; // Default to low speed color
+
+    // If wind direction is invalid, draw a simple circle as a fallback.
+    if (wind_direction_deg <= -999.0) {
+        console.warn("Invalid wind direction data. Drawing a simple circle as a fallback.");
+        const circle = new kakao.maps.Circle({
+            map: map,
+            center: new kakao.maps.LatLng(centerLat, centerLon),
+            radius: predicted_distance_m,
+            strokeWeight: 2,
+            strokeColor: colors.stroke,
+            strokeOpacity: 0.8,
+            fillColor: colors.fill,
+            fillOpacity: 0.5
+        });
+        map.setCenter(new kakao.maps.LatLng(centerLat, centerLon));
+        map.setLevel(7);
+        return circle;
+    }
+
     const centerPoint = new kakao.maps.LatLng(centerLat, centerLon);
-    const numPoints = 32;
     const path = [];
+    const numPoints = 64; // Use more points for a smoother shape
 
     for (let i = 0; i < numPoints; i++) {
         const angle = i * (360 / numPoints);
-        let effectiveRadius = radius_m;
-        if (Math.abs(angle - wind_direction_deg) < 45 || Math.abs(angle - wind_direction_deg) > 315) {
-            effectiveRadius *= 1.5;
-        } else {
-            effectiveRadius *= 0.7;
-        }
-        const point = kakao.maps.geometry.spherical.computeOffset(centerPoint, effectiveRadius, angle);
-        path.push(point);
+
+        // --- Wind Effect Logic ---
+        let angleDifference = Math.abs(angle - wind_direction_deg);
+        if (angleDifference > 180) angleDifference = 360 - angleDifference;
+        const stretchFactor = 1.8;
+        const sideFactor = 0.6;
+        const radiusModifier = Math.cos(toRadians(angleDifference / 2));
+        const interpolation = (stretchFactor - sideFactor) * Math.pow(radiusModifier, 4) + sideFactor;
+        const effectiveRadius = predicted_distance_m * interpolation;
+
+        const pointCoords = getEndpoint(centerLat, centerLon, angle, effectiveRadius);
+        path.push(new kakao.maps.LatLng(pointCoords.lat, pointCoords.lng));
     }
-    
+
     const polygon = new kakao.maps.Polygon({
         path: path,
-        strokeWeight: 3,
-        strokeColor: '#FF0000',
+        strokeWeight: 2,
+        strokeColor: colors.stroke,
         strokeOpacity: 0.8,
-        fillColor: '#FF0000',
-        fillOpacity: 0.35,
+        fillColor: colors.fill,
+        fillOpacity: 0.5,
         map: map
     });
 
@@ -165,6 +201,74 @@ function displayFirePrediction(map, centerLat, centerLon, predictionData) {
     map.setBounds(bounds);
 
     return polygon;
+}
+
+/**
+ * --- NEW: Creates and displays a custom overlay with prediction info. ---
+ */
+function displayInfoOverlay(map, position, predictionData) {
+    const {
+        predicted_area_ha,
+        predicted_distance_m,
+        wind_direction_deg,
+        predicted_speed_category
+    } = predictionData;
+
+    const speedText = { 0: '느림 (1등급)', 1: '중간 (2등급)', 2: '빠름 (3등급)' };
+    const windText = wind_direction_deg <= -999.0 ? 'N/A' : `${wind_direction_deg.toFixed(1)}°`;
+
+    const content = `
+        <div class="info-overlay">
+            <h4>예측 정보</h4>
+            <ul>
+                <li><strong>예상 피해 면적:</strong> ${predicted_area_ha.toFixed(2)} ha</li>
+                <li><strong>예상 확산 거리:</strong> ${predicted_distance_m.toFixed(1)} m</li>
+                <li><strong>주요 확산 방향:</strong> ${windText}</li>
+                <li><strong>예상 확산 속도:</strong> ${speedText[predicted_speed_category] || '알 수 없음'}</li>
+            </ul>
+        </div>
+    `;
+
+    const customOverlay = new kakao.maps.CustomOverlay({
+        map: map,
+        position: position,
+        content: content,
+        yAnchor: 1.1, // Position the overlay above the marker
+        xAnchor: 0.5
+    });
+
+    return customOverlay;
+}
+
+/**
+ * Calculates the coordinates of an endpoint given a starting point,
+ * a bearing (direction in degrees), and a distance in meters.
+ * This is a self-contained replacement for the geometry library's computeOffset.
+ */
+function getEndpoint(lat, lng, bearing, distance) {
+    const R = 6378137; // Earth's radius in meters (WGS-84)
+    const brng = toRadians(bearing);
+    const lat1 = toRadians(lat);
+    const lon1 = toRadians(lng);
+
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance / R) +
+                      Math.cos(lat1) * Math.sin(distance / R) * Math.cos(brng));
+
+    const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distance / R) * Math.cos(lat1),
+                                 Math.cos(distance / R) - Math.sin(lat1) * Math.sin(lat2));
+
+    return {
+        lat: toDegrees(lat2),
+        lng: toDegrees(lon2)
+    };
+}
+
+function toRadians(degrees) {
+    return degrees * Math.PI / 180;
+}
+
+function toDegrees(radians) {
+    return radians * 180 / Math.PI;
 }
 
 function addRegionTag(region, selectedRegions, onRemoveCallback) {

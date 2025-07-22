@@ -63,10 +63,6 @@ def prepare_features_for_prediction(features_json, models):
 
 def main(input_json_string):
     """Main prediction pipeline."""
-    # --- DEBUG: Dump the input to a file to inspect it ---
-    with open("/Users/heejunida/wild_fire_project/predict_input_dump.json", "w") as f:
-        f.write(input_json_string)
-
     try:
         features_dict = json.loads(input_json_string)
     except json.JSONDecodeError:
@@ -83,11 +79,17 @@ def main(input_json_string):
     predicted_area_ha = np.expm1(predicted_area_log)[0]
     predicted_speed_category = models['speed_model'].predict(speed_features_scaled)[0]
 
+    # --- NEW: Calculate predicted distance (radius) in meters ---
+    # This assumes the fire spread is roughly circular. 1 hectare = 10,000 m^2.
+    # Area = pi * r^2  =>  r = sqrt(Area / pi)
+    predicted_distance_m = np.sqrt(predicted_area_ha * 10000 / np.pi)
+
     # Create the final JSON output
     output = {
         "predicted_area_ha": float(predicted_area_ha),
         "predicted_speed_category": int(predicted_speed_category),
-        "wind_direction_deg": float(features_dict.get('WD10M_0h', -1))
+        "wind_direction_deg": float(features_dict.get('WD10M_0h', -999.0)), # Use a clear placeholder
+        "predicted_distance_m": float(predicted_distance_m)
     }
     
     print(json.dumps(output))
