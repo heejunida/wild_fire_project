@@ -14,14 +14,12 @@ def load_models_and_metadata(base_path):
         models = {
             'area_model': joblib.load(base_path + 'area_regressor_model.joblib'),
             'speed_model': joblib.load(base_path + 'speed_classifier_model.joblib'),
-            'scaler': joblib.load(base_path + 'speed_model_scaler.joblib')
+            # Scaler and skewed features are no longer used by the XGBoost speed model
         }
         with open(base_path + 'area_model_columns.json', 'r') as f:
             models['area_cols'] = json.load(f)
         with open(base_path + 'speed_model_columns.json', 'r') as f:
             models['speed_cols'] = json.load(f)
-        with open(base_path + 'speed_model_skewed_features.json', 'r') as f:
-            models['skewed_cols'] = json.load(f)
         return models
     except FileNotFoundError as e:
         print(json.dumps({"error": f"A required model file was not found: {e}. Please run the main training script."}))
@@ -34,12 +32,7 @@ def prepare_features_for_prediction(features_json, models):
     """
     df = pd.DataFrame([features_json])
 
-    # --- Data Cleaning Step (similar to clean_and_prepare_data in training) ---
-    # Select only the columns that the area model was trained on.
-    # This is the crucial step that removes all the unnecessary features.
     area_features = df[models['area_cols']].copy()
-    
-    # Select only the columns that the speed model was trained on.
     speed_features = df[models['speed_cols']].copy()
 
     # Convert all feature columns to numeric, coercing errors
@@ -51,15 +44,9 @@ def prepare_features_for_prediction(features_json, models):
         speed_features[col] = pd.to_numeric(speed_features[col], errors='coerce')
     speed_features = speed_features.fillna(0)
 
-    # --- Transformations for Speed Model ---
-    for col in models['skewed_cols']:
-        if col in speed_features.columns:
-            speed_features[col] = np.sign(speed_features[col]) * np.log1p(np.abs(speed_features[col]))
-    
-    scaled_speed_features = models['scaler'].transform(speed_features)
-    scaled_speed_df = pd.DataFrame(scaled_speed_features, columns=models['speed_cols'])
-
-    return area_features, scaled_speed_df
+    # No scaling or transformation is needed for the XGBoost speed model.
+    # The function now returns the raw (but cleaned) speed features.
+    return area_features, speed_features
 
 def main(input_json_string):
     """Main prediction pipeline."""
@@ -72,12 +59,13 @@ def main(input_json_string):
     model_path = '/Users/heejunida/wild_fire_project/'
     models = load_models_and_metadata(model_path)
 
-    area_features, speed_features_scaled = prepare_features_for_prediction(features_dict, models)
+    area_features, speed_features = prepare_features_for_prediction(features_dict, models)
 
     # Make predictions
     predicted_area_log = models['area_model'].predict(area_features)
     predicted_area_ha = np.expm1(predicted_area_log)[0]
-    predicted_speed_category = models['speed_model'].predict(speed_features_scaled)[0]
+    # Predict directly on the unscaled features for the XGBoost model
+    predicted_speed_category = models['speed_model'].predict(speed_features)[0]
 
     # --- NEW: Calculate predicted distance (radius) in meters ---
     # This assumes the fire spread is roughly circular. 1 hectare = 10,000 m^2.

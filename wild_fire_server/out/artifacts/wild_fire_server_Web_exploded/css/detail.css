@@ -398,3 +398,68 @@ body.shifted {
     color: #555;
     font-weight: 500;
 }
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex; /* This is crucial for it to be visible */
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.2em;
+  z-index: 1000; /* Ensure it's on top of other content */
+  display: none; /* Hidden by default */
+}
+
+.loading-spinner {
+  border: 8px solid #f3f3f3; /* Light grey */
+  border-top: 8px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Wind Arrow Overlay Styles */
+.wind-arrow-overlay {
+  position: relative;
+  width: 30px; /* Match SVG width */
+  height: 30px; /* Match SVG height */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Optional: Add a background or border for visibility if needed */
+  /* background-color: rgba(255, 255, 255, 0.7); */
+  /* border-radius: 50%; */
+}
+
+.wind-arrow-overlay svg {
+  display: block; /* Remove extra space below SVG */
+}
+
+/* Cancel Button for Loading Overlay */
+.cancel-button {
+  background-color: #f44336; /* Red */
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  margin-top: 20px;
+  transition: background-color 0.3s ease;
+}
+
+.cancel-button:hover {
+  background-color: #d32f2f; /* Darker red on hover */
+}

@@ -1,22 +1,32 @@
 package com.wild_fire.servlet;
 
+import java.io.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.*;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
 
 @WebServlet("/fire-predict")
 public class FirePredictController extends HttpServlet {
+
+    public static final ConcurrentHashMap<String, Process> activeProcesses = new ConcurrentHashMap<>();
+
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
         System.out.println("\n--- New Fire Prediction Request Received ---");
+
+        // Generate a unique request ID for this prediction pipeline
+        String requestId = UUID.randomUUID().toString();
+        System.out.println("Request ID: " + requestId);
 
         // 1. Extract parameters
         String lat = request.getParameter("lat");
@@ -54,22 +64,22 @@ public class FirePredictController extends HttpServlet {
         try {
             // --- Pipeline Step 1: Weather Data ---
             System.out.println("Step 1: Calling weather script: " + weatherPy);
-            JSONObject weatherData = runPythonScript(weatherPy, lat, lng, startDate, "0000", endDate, "2359");
+            JSONObject weatherData = runPythonScript(requestId, weatherPy, lat, lng, startDate, "0000", endDate, "2359");
             System.out.println("Weather script SUCCESS.");
 
             // --- Pipeline Step 2: DEM Data ---
             System.out.println("Step 2: Calling DEM script: " + demPy);
-            JSONObject demData = runPythonScript(demPy, lat, lng);
+            JSONObject demData = runPythonScript(requestId, demPy, lat, lng);
             System.out.println("DEM script SUCCESS.");
 
             // --- Pipeline Step 3: NDVI Data ---
             System.out.println("Step 3: Calling NDVI script: " + ndviPy);
-            JSONObject ndviData = runPythonScript(ndviPy, lat, lng, fireDateStr);
+            JSONObject ndviData = runPythonScript(requestId, ndviPy, lat, lng, fireDateStr);
             System.out.println("NDVI script SUCCESS.");
 
             // --- Pipeline Step 4: Tree Cover Data ---
             System.out.println("Step 4: Calling Tree Cover script: " + treePy);
-            JSONObject treeData = runPythonScript(treePy, lat, lng, fireYear);
+            JSONObject treeData = runPythonScript(requestId, treePy, lat, lng, fireYear);
             System.out.println("Tree Cover script SUCCESS.");
 
             // --- Pipeline Step 5: Merge Raw Features ---
@@ -82,20 +92,24 @@ public class FirePredictController extends HttpServlet {
 
             // --- Pipeline Step 6: Feature Engineering ---
             System.out.println("Step 6: Calling Feature Engineering script: " + featEngPy);
-            JSONObject engineeredFeatures = runPythonScriptWithJsonInput(featEngPy, rawFeatures.toJSONString());
+            JSONObject engineeredFeatures = runPythonScriptWithJsonInput(requestId, featEngPy, rawFeatures.toJSONString());
             System.out.println("Feature Engineering SUCCESS.");
 
             // --- Pipeline Step 7: Prediction ---
             System.out.println("Step 7: Calling Prediction script: " + predPy);
-            finalPrediction = runPythonScriptWithJsonInput(predPy, engineeredFeatures.toJSONString());
+            finalPrediction = runPythonScriptWithJsonInput(requestId, predPy, engineeredFeatures.toJSONString());
             System.out.println("Prediction SUCCESS. Final result: " + finalPrediction.toJSONString());
+            finalPrediction.put("requestId", requestId); // Add requestId to the final JSON response
 
         } catch (Exception e) {
             System.err.println("--- PIPELINE FAILED ---");
             e.printStackTrace(); // Print full stack trace to server console
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            response.getWriter().write("{\"error\": \"Error during Python script execution: " + e.getMessage() + "\"}");
+            response.getWriter().write("{\"error\": \"Error during Python script execution: " + e.getMessage() + "}\"}");
             return;
+        } finally {
+            // The process will be removed by FirePredictCancelController on cancellation
+            // or implicitly by the system when the process completes naturally.
         }
 
         // 4. Send the final prediction as the response
@@ -106,7 +120,7 @@ public class FirePredictController extends HttpServlet {
         out.close();
     }
 
-    private JSONObject runPythonScript(String pyPath, String... params) throws Exception {
+    private JSONObject runPythonScript(String requestId, String pyPath, String... params) throws Exception {
         String[] cmd = new String[params.length + 2];
         cmd[0] = "python3";
         cmd[1] = pyPath;
@@ -116,6 +130,7 @@ public class FirePredictController extends HttpServlet {
         pb.directory(new File("/Users/heejunida/wild_fire_project/wild_fire_client/"));
         pb.redirectErrorStream(true);
         Process process = pb.start();
+        activeProcesses.put(requestId, process); // Store the process
 
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -141,11 +156,12 @@ public class FirePredictController extends HttpServlet {
         }
     }
 
-    private JSONObject runPythonScriptWithJsonInput(String pyPath, String jsonInput) throws Exception {
+    private JSONObject runPythonScriptWithJsonInput(String requestId, String pyPath, String jsonInput) throws Exception {
         ProcessBuilder pb = new ProcessBuilder("python3", pyPath);
         pb.directory(new File("/Users/heejunida/wild_fire_project/wild_fire_client/"));
         pb.redirectErrorStream(true);
         Process process = pb.start();
+        activeProcesses.put(requestId, process); // Store the process
 
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()))) {
             writer.write(jsonInput);
