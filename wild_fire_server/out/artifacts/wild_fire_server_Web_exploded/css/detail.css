@@ -13,7 +13,16 @@
   --accent-3:     #ffb84d;
 }
 
+@font-face {
+  font-family: 'Paperlogy-8ExtraBold';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-8ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+}
+
+
 * {
+  font-family: 'Paperlogy-8ExtraBold', sans-serif;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -120,6 +129,7 @@ header h1 {
 
 .search-bar select,
 .search-bar button {
+  font-weight: normal;
   padding: 10px 14px;
   font-size: 16px;
   border: 1px solid #ccc;
@@ -449,6 +459,7 @@ body.shifted {
 
 /* Cancel Button for Loading Overlay */
 .cancel-button {
+  font-weight: normal;
   background-color: #f44336; /* Red */
   color: white;
   padding: 10px 20px;

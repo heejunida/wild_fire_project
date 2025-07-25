@@ -4,49 +4,30 @@ import sys
 import json
 import numpy as np
 import traceback
+import time
 
-def fetch_nasa_hourly_weather(lat, lng, yyyymmdd, hour_str, max_retry=3):
+# --- NEW: Centralized NASA POWER API Parameters ---
+NASA_HOURLY_PARAMS = "T2M,RH2M,WS2M,WD2M,PRECTOTCORR,PS,ALLSKY_SFC_SW_DWN,WS10M,WD10M"
+NASA_DAILY_PRECIP_PARAM = "PRECTOTCORR"
+
+# --- NEW: Generic NASA POWER API Fetcher ---
+def _fetch_nasa_power_data(lat, lng, start_date, end_date, time_interval, parameters, max_retry=3, timeout=30):
+    base_url = "https://power.larc.nasa.gov/api/temporal"
     url = (
-        f"https://power.larc.nasa.gov/api/temporal/hourly/point?"
-        "parameters=T2M,RH2M,WS2M,WD2M,PRECTOTCORR,PS,ALLSKY_SFC_SW_DWN,WS10M,WD10M"
-        f"&community=RE&longitude={lng}&latitude={lat}&start={yyyymmdd}&end={yyyymmdd}&format=JSON"
+        f"{base_url}/{time_interval}/point?"
+        f"parameters={parameters}"
+        f"&community=RE&longitude={lng}&latitude={lat}&start={start_date}&end={end_date}&format=JSON"
     )
     for attempt in range(max_retry):
         try:
-            res = requests.get(url, timeout=30)
-            res.raise_for_status()
-            data = res.json().get("properties", {}).get("parameter", {})
-            hour_key = f"{yyyymmdd}{hour_str.zfill(2)}"
-            result = {
-                "T2M": data.get("T2M", {}).get(hour_key, np.nan),
-                "RH2M": data.get("RH2M", {}).get(hour_key, np.nan),
-                "WS2M": data.get("WS2M", {}).get(hour_key, np.nan),
-                "WD2M": data.get("WD2M", {}).get(hour_key, np.nan),
-                "WS10M": data.get("WS10M", {}).get(hour_key, np.nan),
-                "WD10M": data.get("WD10M", {}).get(hour_key, np.nan),
-                "PRECTOTCORR": data.get("PRECTOTCORR", {}).get(hour_key, np.nan),
-                "PS": data.get("PS", {}).get(hour_key, np.nan),
-                "ALLSKY_SFC_SW_DWN": data.get("ALLSKY_SFC_SW_DWN", {}).get(hour_key, np.nan)
-            }
-            return result
-        except Exception as e:
-            if attempt == max_retry-1:
-                raise e
-
-def fetch_nasa_daily_precip(lat, lng, start_date, end_date, max_retry=3):
-    url = (
-        f"https://power.larc.nasa.gov/api/temporal/daily/point?"
-        f"parameters=PRECTOTCORR&community=RE&longitude={lng}&latitude={lat}"
-        f"&start={start_date}&end={end_date}&format=JSON"
-    )
-    for attempt in range(max_retry):
-        try:
-            res = requests.get(url, timeout=30)
-            res.raise_for_status()
-            data = res.json().get("properties", {}).get("parameter", {}).get("PRECTOTCORR", {})
-            return data
-        except Exception as e:
-            if attempt == max_retry-1:
+            res = requests.get(url, timeout=timeout)
+            res.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
+            return res.json().get("properties", {}).get("parameter", {})
+        except requests.exceptions.RequestException as e:
+            print(f"Attempt {attempt + 1}/{max_retry} failed for {url}: {e}", file=sys.stderr)
+            if attempt < max_retry - 1:
+                time.sleep(2 ** attempt) # Exponential backoff
+            else:
                 raise e
 
 def make_precip_features(lat, lng, end_dt, periods=[7,14,30,60,90]):
@@ -54,10 +35,12 @@ def make_precip_features(lat, lng, end_dt, periods=[7,14,30,60,90]):
     dt_str = end_dt.strftime("%Y%m%d")
     for ndays in periods:
         sdate = (end_dt - datetime.timedelta(days=ndays-1)).strftime("%Y%m%d")
-        precip_dict = fetch_nasa_daily_precip(lat, lng, sdate, dt_str)
+        # Use the new generic fetcher
+        precip_data = _fetch_nasa_power_data(lat, lng, sdate, dt_str, "daily", NASA_DAILY_PRECIP_PARAM)
+        precip_dict = precip_data.get(NASA_DAILY_PRECIP_PARAM, {})
+
         vals = [float(precip_dict.get((end_dt - datetime.timedelta(days=i)).strftime("%Y%m%d"), np.nan)) for i in range(ndays)][::-1]
         arr = np.array(vals, dtype=float)
-        # --- FIX: Add the '_start' suffix to match the feature engineering script ---
         res[f"total_precip_{ndays}d_start"] = float(np.nansum(arr))
         res[f"dry_days_{ndays}d_start"] = int(np.sum(arr < 1))
     # 연속 무강수일수(최근부터 몇일째 비 안옴, 1mm 미만)
@@ -67,73 +50,61 @@ def make_precip_features(lat, lng, end_dt, periods=[7,14,30,60,90]):
             cons += 1
         else:
             break
-    # --- FIX: Add the '_start' suffix ---
     res[f"consecutive_dry_days_start"] = int(cons)
     return res
 
-def make_time_points(start_dt, end_dt, interval_hours=3):
-    points = [start_dt]
-    curr_dt = start_dt
-    while True:
-        curr_dt += datetime.timedelta(hours=interval_hours)
-        if curr_dt >= end_dt:
-            break
-        points.append(curr_dt)
-    if points[-1] != end_dt:
-        points.append(end_dt)
-    return points
+# Removed make_time_points function as it's no longer needed for fetching multiple hourly points
 
 if __name__ == "__main__":
     try:
         lat = float(sys.argv[1])
         lng = float(sys.argv[2])
-        start_yyyymmdd = sys.argv[3]
-        start_hhmm = sys.argv[4]
-        end_yyyymmdd = sys.argv[5]
-        end_hhmm = sys.argv[6]
-        start_dt = datetime.datetime.strptime(start_yyyymmdd + start_hhmm, "%Y%m%d%H%M")
-        end_dt = datetime.datetime.strptime(end_yyyymmdd + end_hhmm, "%Y%m%d%H%M")
-        # duration = (end_dt - start_dt).total_seconds() / 3600
-    except Exception:
+        start_yyyymmdd = sys.argv[3] # Day before fire
+        end_yyyymmdd = sys.argv[4]   # Day of fire
+        fire_time_hour = int(sys.argv[5])
+
+        fire_date_dt = datetime.datetime.strptime(end_yyyymmdd, "%Y%m%d")
+        
+    except Exception as e:
         print(json.dumps({
             "success": False,
-            "error": "인자 부족! 사용법: python fetch_weather_data.py lat lng start_yyyymmdd start_hhmm end_yyyymmdd end_hhmm"
+            "error": f"Argument parsing failed: {e}. Usage: python fetch_all_weather.py lat lng start_yyyymmdd end_yyyymmdd fire_time_hour"
         }, ensure_ascii=False))
         sys.exit(2)
 
     try:
-        # 구간 전체 누적강수, 무강수 피처 (end 기준)
-        precip = make_precip_features(lat, lng, end_dt)
+        # 1. Fetch daily precipitation features (based on the fire date)
+        precip = make_precip_features(lat, lng, fire_date_dt)
 
-        # 3시간 단위(최대 12시간 → 5개 시점) 시계열 기후 데이터
-        time_points = make_time_points(start_dt, end_dt, interval_hours=3)
-        weather_list = []
-        for dt in time_points:
-            yyyymmdd = dt.strftime("%Y%m%d")
-            hour_str = dt.strftime("%H")
-            w = fetch_nasa_hourly_weather(lat, lng, yyyymmdd, hour_str)
-            weather_list.append({
-                "dt": dt.strftime("%Y-%m-%d %H:%M"),
-                **w
-            })
+        # 2. Fetch all hourly weather data for the day before AND the day of the fire
+        hourly_data_raw = _fetch_nasa_power_data(
+            lat, lng, start_yyyymmdd, end_yyyymmdd,
+            "hourly", NASA_HOURLY_PARAMS
+        )
 
-        # 평균, 최대, 최소값 등 요약 feature
-        summary_feats = {}
-        for var in ["T2M","RH2M","WS2M","WD2M","WS10M","WD10M","PRECTOTCORR","PS","ALLSKY_SFC_SW_DWN"]:
-            arr = np.array([x[var] for x in weather_list if var in x and x[var] is not None], dtype=float)
-            summary_feats[f"{var}_mean"] = float(np.nanmean(arr)) if arr.size else None
-            summary_feats[f"{var}_max"] = float(np.nanmax(arr)) if arr.size else None
-            summary_feats[f"{var}_min"] = float(np.nanmin(arr)) if arr.size else None
+        # Structure the hourly data into a list of dictionaries
+        weather_timeseries = []
+        start_dt = datetime.datetime.strptime(start_yyyymmdd, "%Y%m%d")
+        end_dt = datetime.datetime.strptime(end_yyyymmdd, "%Y%m%d")
+        
+        current_dt = start_dt
+        while current_dt <= end_dt:
+            for hour in range(24):
+                key = (current_dt + datetime.timedelta(hours=hour)).strftime("%Y%m%d%H")
+                hourly_point = {"dt_str": key}
+                for param, data_dict in hourly_data_raw.items():
+                    hourly_point[param] = data_dict.get(key, np.nan)
+                weather_timeseries.append(hourly_point)
+            current_dt += datetime.timedelta(days=1)
 
+        # Combine all essential features into the final result
         result = {
             "lat": lat,
             "lng": lng,
-            "start_dt": start_dt.strftime("%Y-%m-%d %H:%M"),
-            "end_dt": end_dt.strftime("%Y-%m-%d %H:%M"),
-            "duration_hours": round((end_dt-start_dt).total_seconds()/3600,2),
-            "weather_timeseries": weather_list,   # 3시간 단위 값 전체 (최대 5개 시점)
+            "fire_date": fire_date_dt.strftime("%Y-%m-%d"),
+            "fire_time_hour": fire_time_hour,
             **precip,
-            **summary_feats,
+            "weather_timeseries": weather_timeseries,
             "success": True
         }
         print(json.dumps(result, ensure_ascii=False))

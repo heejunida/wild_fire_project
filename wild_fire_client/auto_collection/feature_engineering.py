@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import sys
 import os
-import argparse
 import json
+import datetime
+from scipy.stats import linregress
 
 # --- CORRECT IMPORT LOGIC ---
 # Add the parent directory ('wild_fire_client') to the Python path.
@@ -16,6 +17,31 @@ import warnings
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 EPS = 1e-6  # To prevent zero division
+
+def create_trend_features(hourly_values):
+    """Calculates mean, std, min, max, and trend (slope) for a list of values."""
+    if not hourly_values or len(hourly_values) < 2 or np.isnan(hourly_values).all():
+        return {'mean': np.nan, 'std': np.nan, 'min': np.nan, 'max': np.nan, 'trend': np.nan}
+    
+    arr = np.array(hourly_values)
+    arr = arr[~np.isnan(arr)] # Remove NaNs for calculation
+    if arr.size < 2:
+         return {'mean': np.nan, 'std': np.nan, 'min': np.nan, 'max': np.nan, 'trend': np.nan}
+
+    time_axis = np.arange(len(hourly_values))
+    mask = ~np.isnan(hourly_values)
+    if np.sum(mask) < 2:
+        slope = 0.0
+    else:
+        slope = linregress(time_axis[mask], np.array(hourly_values)[mask]).slope
+
+    return {
+        'mean': np.mean(arr),
+        'std': np.std(arr),
+        'min': np.min(arr),
+        'max': np.max(arr),
+        'trend': slope
+    }
 
 def calculate_fwi_components(row, hour=None):
     """Calculates all FWI components for a given row and time step."""
@@ -44,30 +70,53 @@ def feature_engineer_from_json(input_json):
     Takes a JSON object, engineers features, and returns a JSON object.
     """
     # === 1. Load Data from JSON into a DataFrame ===
-    df = pd.DataFrame([input_json])
-
-    # === NEW: Pre-processing to handle nested weather data from the Java pipeline ===
-    # Check if the raw, nested weather data exists.
+    # === NEW: Handle the enriched weather_timeseries structure ===
     if 'weather_timeseries' in df.columns and isinstance(df.iloc[0]['weather_timeseries'], list):
-        # Extract the list of weather data points
-        weather_list = df.iloc[0]['weather_timeseries']
+        fire_time_hour = df.iloc[0].get('fire_time_hour', 14)
+        fire_date_str = df.iloc[0].get('fire_date')
+        fire_dt = datetime.datetime.strptime(f"{fire_date_str} {fire_time_hour}:00", "%Y-%m-%d %H:%M")
+
+        weather_df = pd.DataFrame(df.iloc[0]['weather_timeseries'])
+        weather_df['dt'] = pd.to_datetime(weather_df['dt_str'], format='%Y%m%d%H')
+
+        # --- Isolate Ignition-Time (_0h) Weather ---
+        ignition_weather = weather_df[weather_df['dt'] == fire_dt]
+        if not ignition_weather.empty:
+            ignition_features = ignition_weather.drop(columns=['dt_str', 'dt']).rename(columns=lambda c: f"{c}_0h")
+            for col, value in ignition_features.iloc[0].items():
+                df[col] = value
+
+        # --- Create Historical Trend Features (Past 24h) ---
+        past_start_dt = fire_dt - datetime.timedelta(hours=24)
+        past_end_dt = fire_dt - datetime.timedelta(hours=1)
+        past_weather = weather_df[(weather_df['dt'] >= past_start_dt) & (weather_df['dt'] <= past_end_dt)]
         
-        # "Flatten" the list into separate columns
-        for i, weather_point in enumerate(weather_list):
-            # Assuming a 3-hour interval as per the calling script's logic
-            time_tag = f"{i * 3}h"
-            weather_point.pop('dt', None)  # Remove non-feature datetime string
-            for key, value in weather_point.items():
-                df[f"{key}_{time_tag}"] = value
+        if not past_weather.empty:
+            for param in ['T2M', 'RH2M', 'WS10M']:
+                stats = create_trend_features(past_weather[param].tolist())
+                for stat_name, stat_value in stats.items():
+                    df[f'{param.lower()}_{stat_name}_past_24h'] = stat_value
+
+        # --- Create Forecast Trend Features (Next 12h) ---
+        future_start_dt = fire_dt + datetime.timedelta(hours=1)
+        future_end_dt = fire_dt + datetime.timedelta(hours=12)
+        future_weather = weather_df[(weather_df['dt'] >= future_start_dt) & (weather_df['dt'] <= future_end_dt)]
+
+        if not future_weather.empty:
+            for param in ['T2M', 'RH2M', 'WS10M']:
+                stats = create_trend_features(future_weather[param].tolist())
+                for stat_name, stat_value in stats.items():
+                    df[f'{param.lower()}_{stat_name}_forecast_12h'] = stat_value
         
         df = df.drop(columns=['weather_timeseries'])
 
-    # Use 'start_dt' from the weather script to create 'fire_date' if it doesn't exist
+    # Use 'fire_date' if it exists
     if 'fire_date' not in df.columns and 'start_dt' in df.columns:
         df['fire_date'] = pd.to_datetime(df['start_dt']).dt.strftime('%Y-%m-%d')
-
+    
     # === 2. Handle Missing Weather Data (0.0 -> NaN) ===
-    weather_cols = [col for col in df.columns if any(x in col for x in ['T2M_', 'RH2M_', 'WS2M_', 'WS10M_', 'PRECTOTCORR_', 'WD2M_', 'WD10M_'])]
+    # This is less critical now but good practice
+    weather_cols = [col for col in df.columns if any(x in col for x in ['T2M_', 'RH2M_', 'WS10M_'])]
     for col in weather_cols:
         df[col] = df[col].replace(0.0, np.nan)
 
@@ -136,7 +185,15 @@ def feature_engineer_from_json(input_json):
     df['low_humidity_flag'] = (df['min_humidity_0_12h'] < 30).astype(int) if 'min_humidity_0_12h' in df.columns else 0
     df['extreme_hot_flag'] = (df['max_temp_0_12h'] > 33).astype(int) if 'max_temp_0_12h' in df.columns else 0
 
-    # === 7. Handle NaN/Inf and Convert to Dictionary ===
+    # === 7. One-Hot Encode Land Cover ===
+    # The 'land_cover_name' is a categorical feature. We need to convert it to
+    # a numerical format for the model. pd.get_dummies is perfect for this.
+    if 'land_cover_name' in df.columns:
+        # This will create new columns like 'land_cover_name_Grasslands', 'land_cover_name_Mixed Forests', etc.
+        # The original 'land_cover_name' column is dropped automatically.
+        df = pd.get_dummies(df, columns=['land_cover_name'], prefix='land_cover')
+
+    # === 8. Handle NaN/Inf and Convert to Dictionary ===
     # The dataframe `df` now contains the original, weather, and all engineered features.
     # We just need to fill any remaining NaN/Inf values and convert to a dictionary.
     df = df.replace([np.inf, -np.inf], np.nan)

@@ -16,50 +16,48 @@ let currentInfoOverlay = null;
 let currentWindArrowOverlay = null; // New global variable for the wind direction arrow
 let abortController = null; // New global variable for AbortController
 let clickMarker = null; // Moved to global scope
+let pollingTimerId = null; // New global variable for the polling timer ID
 
 // Approximate coordinates for regions (for map centering)
 const regionCoordinates = {
-    "춘천시": { lat: 37.8813, lng: 127.7298 },
-    "원주시": { lat: 37.3422, lng: 127.9200 },
-    "강릉시": { lat: 37.7519, lng: 128.8762 },
-    "동해시": { lat: 37.5236, lng: 129.1167 },
-    "태백시": { lat: 37.1636, lng: 128.9850 },
-    "속초시": { lat: 38.2000, lng: 128.5917 },
-    "삼척시": { lat: 37.4486, lng: 129.1642 },
-    "홍천군": { lat: 37.8850, lng: 127.8900 },
-    "횡성군": { lat: 37.4922, lng: 128.1950 },
-    "영월군": { lat: 37.1850, lng: 128.4680 },
-    "평창군": { lat: 37.3722, lng: 128.3950 },
-    "정선군": { lat: 37.3800, lng: 128.6600 },
-    "철원군": { lat: 38.1467, lng: 127.3100 },
-    "화천군": { lat: 38.1000, lng: 127.7000 },
-    "양구군": { lat: 38.0800, lng: 127.9000 },
-    "인제군": { lat: 38.0700, lng: 128.1700 },
-    "고성군": { lat: 38.3700, lng: 128.4000 },
-    "양양군": { lat: 38.0700, lng: 128.6200 }
+    "춘천시": {lat: 37.8813, lng: 127.7298},
+    "원주시": {lat: 37.3422, lng: 127.9200},
+    "강릉시": {lat: 37.7519, lng: 128.8762},
+    "동해시": {lat: 37.5236, lng: 129.1167},
+    "태백시": {lat: 37.1636, lng: 128.9850},
+    "속초시": {lat: 38.2000, lng: 128.5917},
+    "삼척시": {lat: 37.4486, lng: 129.1642},
+    "홍천군": {lat: 37.8850, lng: 127.8900},
+    "횡성군": {lat: 37.4922, lng: 128.1950},
+    "영월군": {lat: 37.1850, lng: 128.4680},
+    "평창군": {lat: 37.3722, lng: 128.3950},
+    "정선군": {lat: 37.3800, lng: 128.6600},
+    "철원군": {lat: 38.1467, lng: 127.3100},
+    "화천군": {lat: 38.1000, lng: 127.7000},
+    "양구군": {lat: 38.0800, lng: 127.9000},
+    "인제군": {lat: 38.0700, lng: 128.1700},
+    "고성군": {lat: 38.3700, lng: 128.4000},
+    "양양군": {lat: 38.0700, lng: 128.6200}
 };
 
 /**
  * Initializes the map and all functionalities that depend on the map.
  */
+// ... 위 생략 (전역변수 등은 그대로)
+
 function initMap() {
     const mapContainer = document.getElementById("map");
-    const mapOption = {
-        center: new kakao.maps.LatLng(37.8228, 128.1555),
-        level: 9
-    };
+    const mapOption = { center: new kakao.maps.LatLng(37.8228, 128.1555), level: 9 };
     const map = new kakao.maps.Map(mapContainer, mapOption);
 
-    // let clickMarker = null; // Removed from here
     let searchMarkers = [];
-    const selectedRegions = []; // For the region tags below the chart
+    const selectedRegions = [];
+    let lastStatusMessage = ''; // Variable to track the last status message
 
-    // A. Click listener for fire prediction
     kakao.maps.event.addListener(map, 'click', async (mouseEvent) => {
         const latlng = mouseEvent.latLng;
-        
-        // Immediately show loading overlay and clear previous elements
-        document.getElementById("loadingOverlay").style.display = "flex";
+
+        // Clear previous elements immediately on new click
         if (clickMarker) clickMarker.setMap(null);
         if (currentFirePolygon) currentFirePolygon.setMap(null);
         if (currentInfoOverlay) currentInfoOverlay.setMap(null);
@@ -67,68 +65,169 @@ function initMap() {
 
         clickMarker = new kakao.maps.Marker({
             position: latlng,
-            map: map,
-            image: new kakao.maps.MarkerImage(
-                'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', // A simple red dot
-                new kakao.maps.Size(15, 15),
-                { offset: new kakao.maps.Point(7, 7) } // Center the dot
-            )
+            map: map
         });
-        currentPredictionCenter = latlng; // Store the center for redrawing
+        currentPredictionCenter = latlng;
 
-        abortController = new AbortController(); // Initialize new AbortController for this request
-        const signal = abortController.signal;
-        const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`; // Unique ID for this request
+        // Zoom to the pinpointed location immediately
+        map.setCenter(latlng);
+        map.setLevel(4);
 
-        try {
-            const now = new Date();
-            now.setDate(now.getDate() - 4); // Go back 4 days for data availability
-            const fireDate = now.toISOString().slice(0, 10); // Format as "YYYY-MM-DD"
-            
-            // Initial prediction is always for 12 hours
-            const initialDuration = 12; 
-            document.getElementById("durationSelect").value = initialDuration; // Set dropdown to 12h
-
-            const response = await fetch(`/fire-predict?lat=${latlng.getLat()}&lng=${latlng.getLng()}&fireDate=${fireDate}&fireTime=1200&duration=${initialDuration}&requestId=${requestId}`, { signal });
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
-            }
-            const prediction = await response.json();
-            
-            console.log("✅ Prediction data received from servlet:", prediction);
-            currentPredictionData = prediction; // Store the full prediction data
-
-            // Display initial 12-hour prediction
-            currentFirePolygon = displayFirePrediction(map, latlng.getLat(), latlng.getLng(), prediction.predicted_distance_m, prediction.wind_direction_deg, prediction.predicted_speed_category);
-            currentInfoOverlay = displayInfoOverlay(map, latlng, prediction.predicted_area_ha, prediction.predicted_distance_m, prediction.wind_direction_deg, prediction.predicted_speed_category);
-            currentWindArrowOverlay = displayWindDirectionArrow(map, latlng, prediction.wind_direction_deg); // Display the arrow
-            
-            // Show duration controls and update display
-            document.querySelector(".prediction-controls").style.display = "flex";
-            document.getElementById("predictedDurationDisplay").innerText = `예측 시간: ${initialDuration}시간`;
-
-            // Update charts for initial 12-hour prediction
-            const distanceData = formatDataForDistanceChart(prediction.predicted_area_ha, initialDuration);
-            const speedData = formatDataForSpeedChart(prediction.predicted_speed_category);
-            createDistanceChart(distanceData);
-            createSpeedLevelChart(speedData);
-
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log("Prediction aborted by user.");
-                // No alert needed for user-initiated abort
-            } else {
-                console.error("Error fetching fire prediction:", error);
-                alert("산불 예측 데이터를 가져오는 데 실패했습니다.");
-            }
-            resetMapAndUI(map); // Reset UI on any error or abort
-        } finally {
-            // Hide loading overlay
-            document.getElementById("loadingOverlay").style.display = "none";
-            abortController = null; // Clear the controller
+        // Reset status message for new prediction
+        lastStatusMessage = '';
+        const loadingText = document.querySelector("#loadingOverlay p");
+        if (loadingText) {
+            loadingText.textContent = "예측 데이터를 불러오는 중...";
         }
+
+        // Delay before showing loading overlay and starting prediction
+        setTimeout(async () => {
+            document.getElementById("loadingOverlay").style.display = "flex";
+
+            abortController = new AbortController();
+            const signal = abortController.signal;
+            const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            currentPredictionData = { requestId };
+
+            try {
+                const now = new Date();
+                // --- FIX: Get the current date and the specific hour for the request ---
+                const fireDate = now.toISOString().slice(0, 10); // Format: YYYY-MM-DD
+                const fireTime = now.getHours(); // Get the current hour (0-23)
+
+                const response = await fetch(
+                    `/fire-predict?lat=${latlng.getLat()}&lng=${latlng.getLng()}&fireDate=${fireDate}&fireTime=${fireTime}&requestId=${requestId}`,
+                    { signal }
+                );
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                await response.json();
+
+                pollPredictionResult(requestId, latlng, 0);
+
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log("Prediction aborted by user.");
+                } else {
+                    console.error("Error fetching fire prediction:", error);
+                    alert("산불 예측 서버 요청 실패");
+                }
+                resetMapAndUI(map);
+            }
+        }, 1500);
+    });
+
+    function pollPredictionResult(requestId, latlng, tryCount = 0) {
+        if (abortController && abortController.signal.aborted) {
+            resetMapAndUI(map);
+            return;
+        }
+
+        if (pollingTimerId) clearTimeout(pollingTimerId);
+
+        fetch(`/fire-predict-result?requestId=${requestId}`)
+            .then(res => res.json())
+            .then(prediction => {
+                if (abortController && abortController.signal.aborted) {
+                    resetMapAndUI(map);
+                    return;
+                }
+
+                if (prediction.status === "processing") {
+                    // Update UI and log only if the message has changed
+                    if (prediction.message && prediction.message !== lastStatusMessage) {
+                        lastStatusMessage = prediction.message;
+                        console.log(`Prediction status: ${lastStatusMessage}`);
+                        const loadingText = document.querySelector("#loadingOverlay p");
+                        if (loadingText) {
+                            loadingText.textContent = lastStatusMessage;
+                        }
+                    }
+                    pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
+                } else if (prediction.status === "cancelled") {
+                    resetMapAndUI(map);
+                } else if (prediction.error) {
+                    console.error("Server-side prediction error:", prediction.error);
+                    resetMapAndUI(map);
+                } else if (prediction.predicted_area_ha !== undefined && prediction.predicted_distance_m !== undefined) {
+                    } else if (prediction.predicted_area_ha !== undefined && prediction.predicted_fwi !== undefined) {
+                    // SUCCESS! Full prediction result received
+                    currentPredictionData = { ...prediction, requestId };
+                    const finalAreaHa = prediction.predicted_area_ha;
+                    const speedCategory = fwiToSpeedCategory(prediction.predicted_fwi);
+
+                    // --- Display the 12-hour (final) prediction by default ---
+                    const areaAt12h = calculateGrowthWithSCurve(12, finalAreaHa);
+                    const distanceAt12h = Math.sqrt(areaAt12h * 10000 / Math.PI);
+
+                    currentFirePolygon = displayFirePrediction(map, latlng.getLat(), latlng.getLng(), distanceAt12h, prediction.wind_direction_deg, speedCategory);
+                    currentInfoOverlay = displayInfoOverlay(map, latlng, areaAt12h, distanceAt12h, prediction.wind_direction_deg, speedCategory, prediction.predicted_fwi);
+                    currentWindArrowOverlay = displayWindDirectionArrow(map, latlng, prediction.wind_direction_deg);
+
+                    map.setCenter(latlng);
+                    map.setLevel(4);
+                    
+                    document.querySelector(".prediction-controls").style.display = "flex";
+                    document.getElementById("durationSelect").value = "12"; // Set dropdown to 12h
+                    document.getElementById("predictedDurationDisplay").innerText = `예측 시간: 12시간`;
+
+                    const distanceData = formatDataForDistanceChart(finalAreaHa, 12);
+                    const speedData = formatDataForSpeedChart(speedCategory);
+                    createDistanceChart(distanceData);
+                    createSpeedLevelChart(speedData);
+
+                    document.getElementById("loadingOverlay").style.display = "none";
+                    abortController = null;
+                    pollingTimerId = null;
+                } else {
+                    pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
+                }
+            })
+            .catch(err => {
+                if (abortController && abortController.signal.aborted) {
+                    resetMapAndUI(map);
+                    return;
+                }
+
+                if (tryCount < 40) {
+                    console.error("Network error during polling, retrying:", err);
+                    pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
+                } else {
+                    console.error("Server connection error after multiple retries, stopping polling.", err);
+                    resetMapAndUI(map);
+                }
+            });
+    }
+
+    // Cancel Prediction 버튼
+    document.getElementById("cancelPredictionBtn").addEventListener("click", async () => {
+        if (abortController) {
+            abortController.abort(); // Abort the ongoing fetch request on the client side
+        }
+        if (pollingTimerId) {
+            clearTimeout(pollingTimerId);
+            pollingTimerId = null;
+        }
+        document.getElementById("loadingOverlay").style.display = "none"; // Ensure hidden immediately on cancel click
+
+        // 서버 취소
+        if (currentPredictionData && currentPredictionData.requestId) { // Check if requestId exists
+            try {
+                const response = await fetch('/fire-predict-cancel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `requestId=${currentPredictionData.requestId}`
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Server cancellation failed: ${response.status}, ${errorText}`);
+                }
+            } catch (error) {
+                console.error("Error sending cancellation request to server:", error);
+            }
+        }
+        resetMapAndUI(map); // Move reset to after cancellation attempt
     });
 
     // B. Region selection button listener
@@ -157,8 +256,8 @@ function initMap() {
             currentInfoOverlay = null;
             currentWindArrowOverlay = null;
             // Reset charts (optional, depending on desired behavior)
-            createDistanceChart({ labels: [], datasets: [] });
-            createSpeedLevelChart({ labels: [], datasets: [] });
+            createDistanceChart({labels: [], datasets: []});
+            createSpeedLevelChart({labels: [], datasets: []});
         } else {
             alert("선택된 지역의 좌표 정보가 없습니다.");
         }
@@ -177,61 +276,57 @@ function initMap() {
         }
 
         const selectedDuration = parseInt(document.getElementById("durationSelect").value);
-        const initialPredictedDistance12h = currentPredictionData.predicted_distance_m;
+        const finalAreaHa = currentPredictionData.predicted_area_ha;
         const windDirection = currentPredictionData.wind_direction_deg;
-        const speedCategory = currentPredictionData.predicted_speed_category;
+        
+        // --- NEW: Use the predicted FWI to determine the speed category ---
+        const speedCategory = fwiToSpeedCategory(currentPredictionData.predicted_fwi);
 
-        // Calculate new distance based on selected duration (linear scaling)
-        const newPredictedDistance = (initialPredictedDistance12h / 12) * selectedDuration;
+        // --- NEW: Use S-Curve for realistic growth visualization ---
+        const newPredictedAreaHa = calculateGrowthWithSCurve(selectedDuration, finalAreaHa);
+        const newPredictedDistance = Math.sqrt(newPredictedAreaHa * 10000 / Math.PI);
 
         // Update the polygon on the map
-        if (currentFirePolygon) currentFirePolygon.setMap(null); // Clear old polygon
+        if (currentFirePolygon) currentFirePolygon.setMap(null);
         currentFirePolygon = displayFirePrediction(map, currentPredictionCenter.getLat(), currentPredictionCenter.getLng(), newPredictedDistance, windDirection, speedCategory);
 
         // Update the info overlay
-        if (currentInfoOverlay) currentInfoOverlay.setMap(null); // Clear old overlay
-        // Recalculate area for the new duration for display in overlay
-        const newPredictedAreaHa = (currentPredictionData.predicted_area_ha / 12) * selectedDuration;
-        console.log(`Duration changed to ${selectedDuration}h: Initial 12h Area: ${currentPredictionData.predicted_area_ha.toFixed(2)} ha, New Area: ${newPredictedAreaHa.toFixed(2)} ha, New Distance: ${newPredictedDistance.toFixed(1)} m`);
-        currentInfoOverlay = displayInfoOverlay(map, currentPredictionCenter, newPredictedAreaHa, newPredictedDistance, windDirection, speedCategory);
+        if (currentInfoOverlay) currentInfoOverlay.setMap(null);
+        currentInfoOverlay = displayInfoOverlay(map, currentPredictionCenter, newPredictedAreaHa, newPredictedDistance, windDirection, speedCategory, currentPredictionData.predicted_fwi);
 
         // Update the distance chart
-        const distanceData = formatDataForDistanceChart(currentPredictionData.predicted_area_ha, selectedDuration);
+        const distanceData = formatDataForDistanceChart(finalAreaHa, selectedDuration);
         createDistanceChart(distanceData);
 
-        // Update the predicted duration display
         document.getElementById("predictedDurationDisplay").innerText = `예측 시간: ${selectedDuration}시간`;
     });
 
-    // E. Cancel Prediction button listener
-    document.getElementById("cancelPredictionBtn").addEventListener("click", async () => {
-        if (abortController) {
-            abortController.abort(); // Abort the ongoing fetch request on the client side
-        }
-        document.getElementById("loadingOverlay").style.display = "none"; // Hide loading overlay immediately
-        resetMapAndUI(map); // Reset UI
+}
 
-        // Send a request to the server to terminate the Python process
-        if (currentPredictionData && currentPredictionData.requestId) { // Check if requestId exists
-            try {
-                const response = await fetch('/fire-predict-cancel', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `requestId=${currentPredictionData.requestId}`
-                });
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Server cancellation failed: ${response.status}, ${errorText}`);
-                } else {
-                    console.log("Server-side prediction process termination requested.");
-                }
-            } catch (error) {
-                console.error("Error sending cancellation request to server:", error);
-            }
-        }
-    });
+/**
+ * --- NEW: Translates a Fire Weather Index (FWI) score to a speed category. ---
+ */
+function fwiToSpeedCategory(fwi) {
+    if (fwi < 10) {
+        return 0; // Low
+    } else if (fwi < 25) {
+        return 1; // Medium
+    } else {
+        return 2; // High
+    }
+}
+
+/**
+ * --- NEW: Calculates the fire area at a specific time using a logistic S-curve. ---
+ */
+function calculateGrowthWithSCurve(time, maxArea) {
+    const L = maxArea; // The maximum value (our 12-hour prediction)
+    const k = 0.8;     // The steepness of the curve
+    const x0 = 6;      // The midpoint of the growth (6 hours)
+
+    // Logistic function formula
+    const area = L / (1 + Math.exp(-k * (time - x0)));
+    return area;
 }
 
 /**
@@ -239,31 +334,41 @@ function initMap() {
  * @param {kakao.maps.Map} map The Kakao Map instance.
  */
 function resetMapAndUI(map) {
+    document.getElementById("loadingOverlay").style.display = "none";
+
     // Clear map elements
     if (clickMarker) clickMarker.setMap(null);
     if (currentFirePolygon) currentFirePolygon.setMap(null);
     if (currentInfoOverlay) currentInfoOverlay.setMap(null);
     if (currentWindArrowOverlay) currentWindArrowOverlay.setMap(null);
-    
+
     // Reset global prediction data
     currentPredictionData = null;
     currentPredictionCenter = null;
     currentFirePolygon = null;
     currentInfoOverlay = null;
     currentWindArrowOverlay = null;
+    if (pollingTimerId) {
+        clearTimeout(pollingTimerId);
+        pollingTimerId = null;
+    }
 
-    // Hide duration controls
+    // Hide duration controls and reset loading text
     document.querySelector(".prediction-controls").style.display = "none";
     document.getElementById("predictedDurationDisplay").innerText = "";
+    const loadingText = document.querySelector("#loadingOverlay p");
+    if (loadingText) {
+        loadingText.textContent = "예측 데이터를 불러오는 중...";
+    }
 
     // Reset charts
-    createDistanceChart({ labels: [], datasets: [] });
-    createSpeedLevelChart({ labels: [], datasets: [] });
+    createDistanceChart({labels: [], datasets: []});
+    createSpeedLevelChart({labels: [], datasets: []});
 
     // Reset region selection dropdown
     document.getElementById("regionSelect").value = "";
-    map.setCenter(new kakao.maps.LatLng(37.8228, 128.1555)); // Reset to default center
-    map.setLevel(9); // Reset to default zoom
+    map.setCenter(new kakao.maps.LatLng(37.8228, 128.1555));
+    map.setLevel(9);
 }
 
 function displayWindDirectionArrow(map, position, wind_direction_deg) {
@@ -300,9 +405,9 @@ function displayWindDirectionArrow(map, position, wind_direction_deg) {
 function displayFirePrediction(map, centerLat, centerLon, predicted_distance_m, wind_direction_deg, predicted_speed_category) {
     // --- NEW: Color mapping based on speed category ---
     const speedColors = {
-        0: { stroke: '#FFD700', fill: '#FFFFE0' }, // Low: Yellow
-        1: { stroke: '#FFA500', fill: '#FFDAB9' }, // Medium: Orange
-        2: { stroke: '#FF0000', fill: '#FFC0CB' }  // High: Red
+        0: {stroke: '#FFD700', fill: '#FFFFE0'}, // Low: Yellow
+        1: {stroke: '#FFA500', fill: '#FFDAB9'}, // Medium: Orange
+        2: {stroke: '#FF0000', fill: '#FFC0CB'}  // High: Red
     };
     const colors = speedColors[predicted_speed_category] || speedColors[0]; // Default to low speed color
 
@@ -354,9 +459,7 @@ function displayFirePrediction(map, centerLat, centerLon, predicted_distance_m, 
         map: map
     });
 
-    const bounds = new kakao.maps.LatLngBounds();
-    path.forEach(p => bounds.extend(p));
-    map.setBounds(bounds);
+    // Removed map.setBounds(bounds); to allow explicit map.setCenter/setLevel after prediction
 
     return polygon;
 }
@@ -364,8 +467,8 @@ function displayFirePrediction(map, centerLat, centerLon, predicted_distance_m, 
 /**
  * --- NEW: Creates and displays a custom overlay with prediction info. ---
  */
-function displayInfoOverlay(map, position, predicted_area_ha, predicted_distance_m, wind_direction_deg, predicted_speed_category) {
-    const speedText = { 0: '느림 (1등급)', 1: '중간 (2등급)', 2: '빠름 (3등급)' };
+function displayInfoOverlay(map, position, predicted_area_ha, predicted_distance_m, wind_direction_deg, predicted_speed_category, fwi) {
+    const speedText = {0: '낮음 (FWI < 10)', 1: '중간 (FWI 10-25)', 2: '높음 (FWI > 25)'};
     const windText = wind_direction_deg <= -999.0 ? 'N/A' : `${wind_direction_deg.toFixed(1)}°`;
 
     const content = `
@@ -376,6 +479,7 @@ function displayInfoOverlay(map, position, predicted_area_ha, predicted_distance
                 <li><strong>예상 확산 거리:</strong> ${predicted_distance_m.toFixed(1)} m</li>
                 <li><strong>주요 확산 방향:</strong> ${windText}</li>
                 <li><strong>예상 확산 속도:</strong> ${speedText[predicted_speed_category] || '알 수 없음'}</li>
+                <li><strong>산불위험지수 (FWI):</strong> ${fwi.toFixed(2)}</li>
             </ul>
         </div>
     `;
@@ -403,10 +507,10 @@ function getEndpoint(lat, lng, bearing, distance) {
     const lon1 = toRadians(lng);
 
     const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance / R) +
-                      Math.cos(lat1) * Math.sin(distance / R) * Math.cos(brng));
+        Math.cos(lat1) * Math.sin(distance / R) * Math.cos(brng));
 
     const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distance / R) * Math.cos(lat1),
-                                 Math.cos(distance / R) - Math.sin(lat1) * Math.sin(lat2));
+        Math.cos(distance / R) - Math.sin(lat1) * Math.sin(lat2));
 
     return {
         lat: toDegrees(lat2),
@@ -423,33 +527,33 @@ function toDegrees(radians) {
 }
 
 function addRegionTag(region, selectedRegions, onRemoveCallback) {
-  const container = document.getElementById("selectedRegions");
-  if (selectedRegions.length > 4) {
-    alert("최대 5개 지역까지만 선택할 수 있습니다.");
-    selectedRegions.pop();
-    return;
-  }
+    const container = document.getElementById("selectedRegions");
+    if (selectedRegions.length > 4) {
+        alert("최대 5개 지역까지만 선택할 수 있습니다.");
+        selectedRegions.pop();
+        return;
+    }
 
-  const tag = document.createElement("div");
-  tag.className = "region-tag";
-  tag.innerHTML = `<span class="region-name">${region}</span><span class="remove-btn">×</span>`;
-  container.appendChild(tag);
+    const tag = document.createElement("div");
+    tag.className = "region-tag";
+    tag.innerHTML = `<span class="region-name">${region}</span><span class="remove-btn">×</span>`;
+    container.appendChild(tag);
 
-  tag.querySelector(".remove-btn").addEventListener("click", () => {
-    container.removeChild(tag);
-    const index = selectedRegions.indexOf(region);
-    if (index > -1) selectedRegions.splice(index, 1);
-    onRemoveCallback();
-  });
+    tag.querySelector(".remove-btn").addEventListener("click", () => {
+        container.removeChild(tag);
+        const index = selectedRegions.indexOf(region);
+        if (index > -1) selectedRegions.splice(index, 1);
+        onRemoveCallback();
+    });
 }
 
 function setupHamburgerMenu() {
-  const hamburger = document.getElementById("hamburgerBtn");
-  const sideMenu = document.getElementById("sideMenu");
-  hamburger.addEventListener("click", () => {
-    sideMenu.classList.toggle("active");
-    hamburger.classList.toggle("active");
-  });
+    const hamburger = document.getElementById("hamburgerBtn");
+    const sideMenu = document.getElementById("sideMenu");
+    hamburger.addEventListener("click", () => {
+        sideMenu.classList.toggle("active");
+        hamburger.classList.toggle("active");
+    });
 }
 
 function setupHeaderScroll() {
@@ -461,30 +565,30 @@ function setupHeaderScroll() {
     const minScrollToHide = 150;
 
     function handleScroll() {
-      const currentY = window.scrollY;
-      const delta = currentY - lastToggleY;
-      if (Math.abs(delta) >= scrollThreshold) {
-        if (delta > 0 && currentY > minScrollToHide) {
-          header.classList.add("hide");
-        } else if (delta < 0) {
-          header.classList.remove("hide");
+        const currentY = window.scrollY;
+        const delta = currentY - lastToggleY;
+        if (Math.abs(delta) >= scrollThreshold) {
+            if (delta > 0 && currentY > minScrollToHide) {
+                header.classList.add("hide");
+            } else if (delta < 0) {
+                header.classList.remove("hide");
+            }
+            lastToggleY = currentY;
         }
-        lastToggleY = currentY;
-      }
-      ticking = false;
+        ticking = false;
     }
 
     window.addEventListener("scroll", () => {
-      if (!ticking) {
-        window.requestAnimationFrame(handleScroll);
-        ticking = true;
-      }
+        if (!ticking) {
+            window.requestAnimationFrame(handleScroll);
+            ticking = true;
+        }
     });
 }
 
 function formatDataForDistanceChart(predicted_area_ha, selectedDuration) {
     const final_radius_m_at_12h = Math.sqrt(predicted_area_ha * 10000 / Math.PI); // Convert ha to m^2, then to radius
-    
+
     const labels = [];
     const data = [];
     for (let h = 3; h <= 12; h += 3) {
@@ -524,27 +628,27 @@ function formatDataForSpeedChart(predicted_speed_category) {
 // Mock data functions are no longer directly used for prediction charts,
 // but kept for potential future use or other chart sections.
 function generateMockLineData(region) {
-  const data = {
-    labels: ["3시간 후", "6시간 후", "9시간 후", "12시간 후"],
-    datasets: [{
-      label: `${region} 확산 거리(km)`,
-      data: Array.from({ length: 4 }, () => Math.random() * 10),
-      borderColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
-      fill: false,
-    }, ],
-  };
-  return data;
+    const data = {
+        labels: ["3시간 후", "6시간 후", "9시간 후", "12시간 후"],
+        datasets: [{
+            label: `${region} 확산 거리(km)`,
+            data: Array.from({length: 4}, () => Math.random() * 10),
+            borderColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
+            fill: false,
+        },],
+    };
+    return data;
 }
 
 function generateMockBarData(regions) {
-  const labels = ["1등급(느림)", "2등급(중간)", "3등급(빠름)"];
-  const datasets = regions.map((region, i) => {
-    const hue = (360 / regions.length) * i;
-    return {
-      label: region,
-      data: Array.from({ length: 3 }, () => Math.floor(Math.random() * 100)),
-      backgroundColor: `hsla(${hue}, 70%, 50%, 0.7)`,
-    };
-  });
-  return { labels, datasets };
+    const labels = ["1등급(느림)", "2등급(중간)", "3등급(빠름)"];
+    const datasets = regions.map((region, i) => {
+        const hue = (360 / regions.length) * i;
+        return {
+            label: region,
+            data: Array.from({length: 3}, () => Math.floor(Math.random() * 100)),
+            backgroundColor: `hsla(${hue}, 70%, 50%, 0.7)`,
+        };
+    });
+    return {labels, datasets};
 }

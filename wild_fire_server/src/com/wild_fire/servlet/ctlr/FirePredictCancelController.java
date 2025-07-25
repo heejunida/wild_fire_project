@@ -1,4 +1,4 @@
-package com.wild_fire.servlet;
+package com.wild_fire.servlet.ctlr;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -6,7 +6,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import com.wild_fire.servlet.FirePredictController; // Add this import statement
 
 @WebServlet("/fire-predict-cancel")
 public class FirePredictCancelController extends HttpServlet {
@@ -22,6 +21,8 @@ public class FirePredictCancelController extends HttpServlet {
         // Directly access the static map from FirePredictController
         Process process = FirePredictController.activeProcesses.remove(requestId); // Remove and get the process
         if (process != null) {
+            // Mark as cancelled before terminating
+            FirePredictController.cancellationStatus.put(requestId, true);
             System.out.println("Attempting to terminate process for requestId: " + requestId);
             process.destroyForcibly(); // Forcefully terminate the process
             try {
