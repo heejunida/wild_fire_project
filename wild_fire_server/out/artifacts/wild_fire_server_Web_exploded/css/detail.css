@@ -56,7 +56,7 @@ main {
 }
 
 .chart-container h3{
-  margin-bottom: 100px;
+  margin-bottom: 20px;
   padding: 20px;
   font-size: 25px;
 }
@@ -166,7 +166,20 @@ header h1 {
   padding: 20px;
   border-radius: 16px;
   box-shadow: 0 0 10px rgba(0,0,0,0.05);
-  height: 740px;
+  display: flex;
+  flex-direction: column;
+  height: 800px; /* Let height be determined by content */
+}
+#chartContainer {
+  position: relative;
+  height: 400px; /* 필요에 따라 조절 */
+  width: 100%;
+  overflow: visible;
+}
+
+#distanceChart {
+  height: 80% !important;
+  width: 100% !important;
 }
 
 /* 하단: 비교용 차트 */
@@ -473,4 +486,63 @@ body.shifted {
 
 .cancel-button:hover {
   background-color: #d32f2f; /* Darker red on hover */
+}
+
+/* --- FIX: Updated Styles for Model Confidence Section --- */
+.confidence-section {
+    background: white;
+    padding: 24px 40px;
+    margin: 20px 40px;
+    border-radius: 16px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+
+.confidence-section h3 {
+    padding: 20px;
+    font-size: 25px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.metrics-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    text-align: left; /* Align text to the left for readability */
+}
+
+.metric-item {
+    background-color: var(--bg-section);
+    padding: 20px;
+    border-radius: 12px;
+    border-left: 5px solid var(--accent-2); /* Add a highlight border */
+}
+
+.metric-item h4 {
+    font-size: 18px;
+    color: var(--bg-header);
+    margin-bottom: 15px;
+}
+
+.metric-item p {
+    font-size: 16px;
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.metric-item strong {
+    color: var(--text-main);
+}
+
+.metric-item small {
+    font-size: 13px;
+    color: #777;
+    display: block; /* Ensure it takes its own line */
+    margin-top: 15px;
+}
+
+.confidence-range {
+    font-size: 0.9em;
+    color: #555;
+    font-style: italic;
 }

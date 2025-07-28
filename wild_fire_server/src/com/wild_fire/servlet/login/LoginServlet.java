@@ -16,12 +16,13 @@ public class LoginServlet extends HttpServlet {
         String pw = req.getParameter("user_pw");
 
         UserDAO dao = new UserDAO();
-        boolean success = dao.login(id, pw);
+        Long uId = dao.loginAndGetUid(id, pw);
 
         resp.setContentType("application/json; charset=UTF-8");
-        if (success) {
+        if (uId != null) {
             HttpSession session = req.getSession();
-            session.setAttribute("user", id);
+            session.setAttribute("user", id);    // (String) user_id
+            session.setAttribute("u_id", uId);   // (Long) u_id (PK)
             resp.getWriter().write("{\"result\":\"success\"}");
         } else {
             resp.getWriter().write("{\"result\":\"fail\"}");

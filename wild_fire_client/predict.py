@@ -4,6 +4,10 @@ import joblib
 import json
 import sys
 import warnings
+import os
+import time
+import datetime
+from save_to_db import save_prediction_to_oracle
 
 warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -70,14 +74,52 @@ def main(input_json_string):
 
     predicted_distance_m = np.sqrt(predicted_area_ha * 10000 / np.pi)
 
+    # --- NEW: Save the results to the Oracle database ---
+    # We need an ID and a datetime for the database record.
+    # The Java controller should pass the requestId and the full datetime string.
+    fire_id = features_dict.get('requestId', f"pred-{int(time.time())}")
+    fire_datetime_str = features_dict.get('fire_datetime', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    
+    # The direction model is separate, so we'll just use the raw wind direction for now.
+    # A more advanced implementation would run the direction model here as well.
+    wind_direction_deg = float(features_dict.get('WD10M_0h', -999.0))
+    dir_pred = degrees_to_cardinal(wind_direction_deg) # Helper function needed
+
+    save_prediction_to_oracle(
+        fire_id=fire_id,
+        fire_datetime=fire_datetime_str,
+        lat=features_dict.get('lat'),
+        lon=features_dict.get('lng'),
+        area_pred=float(predicted_area_ha),
+        fwi_pred=float(predicted_fwi),
+        dir_pred=dir_pred,
+        dist_pred=float(predicted_distance_m),
+        features_json=features_dict
+    )
+
+    # Create the JSON output for the frontend
     output = {
         "predicted_area_ha": float(predicted_area_ha),
         "predicted_fwi": float(predicted_fwi),
-        "wind_direction_deg": float(features_dict.get('WD10M_0h', -999.0)),
+        "wind_direction_deg": wind_direction_deg,
         "predicted_distance_m": float(predicted_distance_m)
     }
     
     print(json.dumps(output))
+
+def degrees_to_cardinal(d):
+    """Converts wind direction in degrees to 8-point cardinal directions."""
+    if d <= -999.0:
+        return "N/A"
+    dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    ix = int(round(d / 45.)) % 8
+    return dirs[ix]
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        main(sys.argv[1])
+    else:
+        main(sys.stdin.read())
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:

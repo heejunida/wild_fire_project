@@ -18,6 +18,5 @@ public class LogoutServlet extends HttpServlet {
         resp.setContentType("application/json; charset=UTF-8");
         resp.getWriter().write("{\"result\":\"logout\"}");
 
-        resp.sendRedirect("/main.jsp");
     }
 }

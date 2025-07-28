@@ -6,14 +6,17 @@
     <title>산불 확산 예측 상세 정보</title>
     <link rel="stylesheet" href="css/detail.css"/>
 </head>
+<script>
+    window.loginUserId = "<%= session.getAttribute("user") != null ? session.getAttribute("user") : "" %>";
+</script>
 <body>
     <div id="hamburgerBtn">☰</div>
     <div id="sideMenu">
         <div class="side-menu">
             <ul>
                 <li><a href="#map">🗺 확산 속도 및 범위</a></li>
-                <li><a href="#distanceChart">📈 시간별 거리 변화</a></li>
-                <li><a href="#speedLevelChart">📊 확산 속도 등급 분포</a></li>
+                <li><a href="#distanceChart">📈 시간별 확산 변화</a></li>
+                <li><a href="#modelConfidence">📊 모델 예측 신뢰도</a></li>
             </ul>
         </div>
     </div>
@@ -58,6 +61,7 @@
                         <select id="durationSelect">
                             <option value="3">3시간</option>
                             <option value="6">6시간</option>
+                            <option value="9">9시간</option>
                             <option value="12" selected>12시간</option>
                         </select>
                         <span id="predictedDurationDisplay" style="margin-left: 10px; font-weight: bold;"></span>
@@ -70,17 +74,20 @@
             </div>
             <div class="chart-area">
                 <div class="chart-container">
-                    <h3>시간별 확산 거리 변화</h3>
+                    <h3>시간별 확산 변화</h3>
                     <canvas id="distanceChart" width="600" height="300"></canvas>
                 </div>
             </div>
         </div>
 
-        <section class="compare-area">
-            <h3>지역별 확산 속도 등급별 분포</h3>
-            <div id="selectedRegions" class="selected-regions"></div>
-            <canvas id="speedLevelChart" width="600" height="300"></canvas>
+        <!-- --- FIX: Replaced the old chart with the new model confidence section --- -->
+        <section id="modelConfidence" class="confidence-section">
+            <h3>모델 예측 신뢰도</h3>
+            <div id="confidenceMetrics" class="metrics-container">
+                <!-- JavaScript will populate this area -->
+            </div>
         </section>
+
     </div>
     <div class = "blank"></div>
     <footer id="siteFooter" class="site-footer">

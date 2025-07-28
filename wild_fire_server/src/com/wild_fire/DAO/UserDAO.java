@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+
 import org.mindrot.jbcrypt.BCrypt;
 
 public class UserDAO {
@@ -42,6 +43,7 @@ public class UserDAO {
         }
         return false;
     }
+
     public UserDTO findUserById(String userId) {
         String sql = "SELECT user_id, user_name FROM users WHERE user_id = ?";
         try (Connection conn = DBUtil.getConnection();
@@ -60,6 +62,7 @@ public class UserDAO {
         }
         return null;
     }
+
     public String findUserIdByName(String userName) {
         String sql = "SELECT user_id, user_name FROM users WHERE user_name = ?";
         try (Connection conn = DBUtil.getConnection();
@@ -77,10 +80,11 @@ public class UserDAO {
         }
         return null; // 못 찾으면 null
     }
+
     public Boolean findUserPwByIdAndName(String userId, String userName) {
         String sql = "SELECT user_id, user_name FROM users WHERE user_id = ? AND user_name = ?";
-        try(Connection conn = DBUtil.getConnection();
-            PreparedStatement ps = conn.prepareStatement(sql)) {
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, userId);
             ps.setString(2, userName);
             try (ResultSet rs = ps.executeQuery()) {
@@ -102,6 +106,7 @@ public class UserDAO {
         }
         return false;
     }
+
     // 비밀번호 변경 (비번은 반드시 bcrypt로 해시해서 넘겨야 함)
     public boolean updateUserPw(String userId, String hashPw) {
         String sql = "UPDATE users SET user_pw = ? WHERE user_id = ?";
@@ -124,7 +129,69 @@ public class UserDAO {
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getString("user_pw");
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return null;
+    }
+    public Long getUidByUserId(String userId) throws Exception {
+        String sql = "SELECT u_id FROM users WHERE user_id = ?";
+        Long uid = null;
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    uid = rs.getLong("u_id");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }
+
+        return uid;
+    }
+
+    public Long loginAndGetUid(String userId, String password) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        Long uId = null;
+
+        try {
+            conn = com.wild_fire.util.DBUtil.getConnection();
+
+            String sql = "SELECT u_id, user_pw FROM users WHERE user_id = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, userId);
+            rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                String dbPw = rs.getString("user_pw");
+                if (BCrypt.checkpw(password, dbPw)) {
+                    // 로그인 성공 시 u_id 반환
+                    uId = rs.getLong("u_id");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+            } catch (Exception e) {
+            }
+            try {
+                if (pstmt != null) pstmt.close();
+            } catch (Exception e) {
+            }
+            try {
+                if (conn != null) conn.close();
+            } catch (Exception e) {
+            }
+        }
+        return uId; // 성공 시 u_id, 실패 시 null
     }
 }
