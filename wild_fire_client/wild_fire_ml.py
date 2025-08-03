@@ -74,6 +74,24 @@ def train_model(X, y, model_name, model_class, param_grid, is_classifier=False):
     grid_search.fit(X_train_scaled, y_train)
     best_model = grid_search.best_estimator_
     
+    # --- Evaluate and Print Metrics ---
+    y_pred = best_model.predict(X_test_scaled)
+    metrics = {}
+    print(f"\n--- Evaluation Metrics for {model_name} ---")
+    if is_classifier:
+        f1 = f1_score(y_test, y_pred, average='weighted')
+        metrics = {'f1_weighted': f1}
+        print(f"  F1-Score: {f1:.4f}")
+        plot_confusion_matrix(y_test, y_pred, model_name)
+        print(f"  Confusion Matrix saved to {model_name}_confusion_matrix.png")
+    else:
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        metrics = {'mae': mae, 'r2': r2}
+        print(f"  Mean Absolute Error: {mae:.4f}")
+        print(f"  R-squared : {r2:.4f}")
+    print("-" * (26 + len(model_name)))
+
     joblib.dump(best_model, os.path.join(BASE_DIR, f'{model_name}_model.joblib'))
     joblib.dump(scaler, os.path.join(BASE_DIR, f'{model_name}_scaler.joblib'))
     joblib.dump(imputer, os.path.join(BASE_DIR, f'{model_name}_imputer.joblib'))
@@ -82,7 +100,8 @@ def train_model(X, y, model_name, model_class, param_grid, is_classifier=False):
     print(f"✅ {model_name} artifacts saved.")
     
     plot_feature_importance(best_model, X.columns, model_name)
-    return best_model, X.columns
+    return best_model, X.columns, metrics
+
 
 # --- Main Execution ---
 def main(file_path):
@@ -94,12 +113,14 @@ def main(file_path):
     regressor_params = {'n_estimators': [100, 200], 'learning_rate': [0.05, 0.1], 'max_depth': [5, 7]}
     classifier_params = {'n_estimators': [100, 200], 'learning_rate': [0.05, 0.1], 'max_depth': [5, 7], 'objective': ['multi:softmax'], 'num_class': [8], 'eval_metric': ['mlogloss']}
 
+    all_metrics = []
+
     # --- 1. Area Model (Feature Selection Pass) ---
     print("\n" + "="*50 + "\nSTEP 1: AREA MODEL FEATURE SELECTION\n" + "="*50)
     df['fire_area_log'] = np.log1p(df[TARGET_AREA])
     X_full, y_area = prepare_data(df, 'fire_area_log')
-    # We train a standard regressor just to find the most important features
-    initial_area_model, initial_columns = train_model(X_full, y_area, 'area_log_initial', xgb.XGBRegressor(random_state=42), regressor_params)
+    initial_area_model, initial_columns, metrics = train_model(X_full, y_area, 'area_log_initial', xgb.XGBRegressor(random_state=42), regressor_params)
+    all_metrics.append({'model_name': 'area_log_initial', **metrics})
     
     importances = initial_area_model.feature_importances_
     top_indices = np.argsort(importances)[-TOP_N_FEATURES:]
@@ -111,27 +132,58 @@ def main(file_path):
     print("\n" + "="*50 + "\nSTEP 2: AREA QUANTILE MODEL TRAINING\n" + "="*50)
     quantiles = {'low': 0.1, 'median': 0.5, 'high': 0.9}
     for name, alpha in quantiles.items():
-        model = xgb.XGBRegressor(
-            objective='reg:quantileerror',
-            quantile_alpha=alpha,
-            random_state=42
-        )
-        train_model(X_top, y_top, f'area_quantile_{name}', model, regressor_params)
+        model_name = f'area_quantile_{name}'
+        model = xgb.XGBRegressor(objective='reg:quantileerror', quantile_alpha=alpha, random_state=42)
+        _, _, metrics = train_model(X_top, y_top, model_name, model, regressor_params)
+        all_metrics.append({'model_name': model_name, **metrics})
 
     # --- 3. FWI, Direction, Distance Models ---
     print("\n" + "="*50 + "\nSTEP 3: FWI, DIRECTION, DISTANCE MODELS\n" + "="*50)
     df_fwi = df.dropna(subset=[TARGET_FWI]).copy()
     X_fwi, y_fwi = prepare_data(df_fwi, TARGET_FWI)
-    train_model(X_fwi, y_fwi, 'fwi', xgb.XGBRegressor(random_state=42), regressor_params)
+    _, _, metrics = train_model(X_fwi, y_fwi, 'fwi', xgb.XGBRegressor(random_state=42), regressor_params)
+    all_metrics.append({'model_name': 'fwi', **metrics})
 
     df_dir = df.dropna(subset=['WD10M_0h']).copy()
     df_dir[TARGET_DIRECTION] = df_dir['WD10M_0h'].apply(lambda d: int(round(d / 45.)) % 8)
     X_dir, y_dir = prepare_data(df_dir, TARGET_DIRECTION)
-    train_model(X_dir, y_dir, 'direction', xgb.XGBClassifier(random_state=42), classifier_params, is_classifier=True)
+    _, _, metrics = train_model(X_dir, y_dir, 'direction', xgb.XGBClassifier(random_state=42), classifier_params, is_classifier=True)
+    all_metrics.append({'model_name': 'direction', **metrics})
 
     df[TARGET_DISTANCE] = np.sqrt(df[TARGET_AREA])
     X_dist, y_dist = prepare_data(df, TARGET_DISTANCE)
-    train_model(X_dist, y_dist, 'distance', xgb.XGBRegressor(random_state=42), regressor_params)
+    _, _, metrics = train_model(X_dist, y_dist, 'distance', xgb.XGBRegressor(random_state=42), regressor_params)
+    all_metrics.append({'model_name': 'distance', **metrics})
+
+    # --- 4. Performance Comparison ---
+    print("\n" + "="*50 + "\nSTEP 4: MODEL PERFORMANCE COMPARISON\n" + "="*50)
+    df_metrics = pd.DataFrame(all_metrics).set_index('model_name')
+    print(df_metrics.to_string(float_format="%.4f"))
+    df_metrics.to_csv(os.path.join(BASE_DIR, "model_performance_summary.csv"))
+    print("\nPerformance summary saved to model_performance_summary.csv")
+
+    # Visualize Regression Metrics
+    df_regr = df_metrics[df_metrics['r2'].notna()].sort_values('r2', ascending=False)
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12)) # Increased figure height
+    
+    # R-squared Plot (Unchanged)
+    sns.barplot(x=df_regr.index, y=df_regr['r2'], ax=ax1, palette='viridis')
+    ax1.set_title('Model Comparison: R-squared (R²)', fontsize=16)
+    ax1.set_ylabel('R² Score')
+    ax1.tick_params(axis='x', rotation=45)
+
+    # MAE Plot (with Log Scale)
+    df_regr_mae = df_regr.sort_values('mae', ascending=False) # Sort by MAE for this plot
+    sns.barplot(x=df_regr_mae.index, y=df_regr_mae['mae'], ax=ax2, palette='plasma')
+    ax2.set_title('Model Comparison: Mean Absolute Error (MAE) - Log Scale', fontsize=16)
+    ax2.set_ylabel('MAE Score (Log Scale)')
+    ax2.set_yscale('log') # Apply logarithmic scale
+    ax2.tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(BASE_DIR, "model_performance_comparison.png"))
+    print("Performance comparison plot saved to model_performance_comparison.png")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Wildfire ML Pipeline with Quantile Regression")

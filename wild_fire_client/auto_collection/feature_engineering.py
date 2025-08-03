@@ -111,6 +111,11 @@ def feature_engineer_from_json(input_json):
     df['is_autumn'] = df['fire_month'].isin([9, 10, 11]).astype(int)
 
     # --- Calculate FWI ---
+    # --- DEBUG: Print FWI input values ---
+    print("--- FWI Calculation Inputs ---", file=sys.stderr)
+    print(df[['T2M_0h', 'RH2M_0h', 'WS10M_0h', 'PRECTOTCORR_0h', 'fire_month']].iloc[0], file=sys.stderr)
+    print("------------------------------", file=sys.stderr)
+    
     fwi_results = df.apply(lambda row: calculate_fwi_components(row, hour=0), axis=1)
     df = pd.concat([df, pd.DataFrame(fwi_results.tolist()).add_suffix('_0h')], axis=1)
 
