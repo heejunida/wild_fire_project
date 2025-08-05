@@ -11,6 +11,12 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener('load', () => {
         setTimeout(initMap, 100); // A small 100ms delay to ensure rendering is complete
     });
+
+    // --- FIX: Attach button listeners immediately on DOM load ---
+    document.getElementById("cancelPredictionBtn").addEventListener("click", handleCancel);
+    document.getElementById("selectRegionBtn").addEventListener("click", handleRegionSelect);
+    document.getElementById("resetBtn").addEventListener("click", () => resetMapAndUI(true));
+    document.getElementById("durationSelect").addEventListener("change", handleDurationChange);
 });
 
 // Global variables
@@ -69,7 +75,7 @@ function setupMapEventListeners(map) {
 
         console.log("Clicked coordinates (stable):", latitude, longitude);
 
-        resetMapAndUI(map, false);
+        resetMapAndUI(false);
         
         const stableLatLng = new kakao.maps.LatLng(latitude, longitude);
         clickMarker = new kakao.maps.Marker({ position: stableLatLng, map: map });
@@ -101,7 +107,7 @@ function setupMapEventListeners(map) {
             pollPredictionResult(requestId, stableLatLng);
         } catch (error) {
             if (error.name !== 'AbortError') console.error("Error fetching fire prediction:", error);
-            resetMapAndUI(map);
+            resetMapAndUI();
         }
     });
 
@@ -126,7 +132,7 @@ function setupMapEventListeners(map) {
                     displayFullPrediction(map, latlng, prediction);
                 } else {
                     console.error("Server-side prediction error:", prediction.error);
-                    resetMapAndUI(map);
+                    resetMapAndUI();
                 }
             })
             .catch(err => {
@@ -134,16 +140,12 @@ function setupMapEventListeners(map) {
                 if (tryCount < 40) {
                     pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
                 } else {
-                    resetMapAndUI(map);
+                    resetMapAndUI();
                 }
             });
     }
 
-    // --- FIX: Moved button event listeners here to ensure mapInstance is stable ---
-    document.getElementById("cancelPredictionBtn").addEventListener("click", () => handleCancel(map));
-    document.getElementById("selectRegionBtn").addEventListener("click", () => handleRegionSelect(map));
-    document.getElementById("resetBtn").addEventListener("click", () => resetMapAndUI(map, true));
-    document.getElementById("durationSelect").addEventListener("change", () => handleDurationChange(map));
+    // Button event listeners have been moved to DOMContentLoaded
 }
 
 let resizeTimer;
@@ -177,7 +179,7 @@ function displayFullPrediction(map, latlng, prediction) {
     pollingTimerId = null;
 }
 
-async function handleCancel(map) {
+async function handleCancel() {
     if (abortController) abortController.abort();
     if (pollingTimerId) clearTimeout(pollingTimerId);
     if (currentPredictionData?.requestId) {
@@ -191,21 +193,22 @@ async function handleCancel(map) {
             console.error("Error sending cancellation request:", error);
         }
     }
-    resetMapAndUI(map);
+    resetMapAndUI();
 }
 
-function handleRegionSelect(map) {
+function handleRegionSelect() {
+    if (!mapInstance) return alert("지도가 로딩 중입니다. 잠시 후 다시 시도해주세요.");
     const selectedRegion = document.getElementById("regionSelect").value;
     if (!selectedRegion) return alert("지역을 선택해주세요.");
     const coords = regionCoordinates[selectedRegion];
     if (coords) {
-        map.setCenter(new kakao.maps.LatLng(coords.lat, coords.lng));
-        map.setLevel(7);
-        resetMapAndUI(map, false);
+        mapInstance.setCenter(new kakao.maps.LatLng(coords.lat, coords.lng));
+        mapInstance.setLevel(7);
+        resetMapAndUI(false);
     }
 }
 
-function handleDurationChange(map) {
+function handleDurationChange() {
     if (!currentPredictionData || !currentPredictionCenter) return;
     const selectedDuration = parseInt(document.getElementById("durationSelect").value);
     // --- FIX: Base the primary visualization on the high-end (worst-case) prediction ---
@@ -217,10 +220,10 @@ function handleDurationChange(map) {
     const newPredictedDistance = Math.sqrt(newPredictedAreaHa * 10000 / Math.PI);
 
     if (currentFirePolygon) currentFirePolygon.setMap(null);
-    currentFirePolygon = displayFirePrediction(map, currentPredictionCenter.getLat(), currentPredictionCenter.getLng(), newPredictedDistance, windDirection, speedCategory);
+    currentFirePolygon = displayFirePrediction(mapInstance, currentPredictionCenter.getLat(), currentPredictionCenter.getLng(), newPredictedDistance, windDirection, speedCategory);
     
     if (currentInfoOverlay) currentInfoOverlay.setMap(null);
-    currentInfoOverlay = displayInfoOverlay(map, currentPredictionCenter, currentPredictionData, newPredictedAreaHa, newPredictedDistance);
+    currentInfoOverlay = displayInfoOverlay(mapInstance, currentPredictionCenter, currentPredictionData, newPredictedAreaHa, newPredictedDistance);
 
     document.getElementById("predictedDurationDisplay").innerText = `예측 시간: ${selectedDuration}시간`;
 }
@@ -234,7 +237,7 @@ function calculateGrowthWithSCurve(time, maxArea) {
     return L / (1 + Math.exp(-k * (time - x0)));
 }
 
-function resetMapAndUI(map, resetPosition = true) {
+function resetMapAndUI(resetPosition = true) {
     document.getElementById("loadingOverlay").style.display = "none";
     if (clickMarker) clickMarker.setMap(null);
     if (currentFirePolygon) currentFirePolygon.setMap(null);
@@ -254,8 +257,10 @@ function resetMapAndUI(map, resetPosition = true) {
 
     if (resetPosition) {
         document.getElementById("regionSelect").value = "";
-        map.setCenter(new kakao.maps.LatLng(37.8228, 128.1555));
-        map.setLevel(9);
+        if (mapInstance) {
+            mapInstance.setCenter(new kakao.maps.LatLng(37.8228, 128.1555));
+            mapInstance.setLevel(9);
+        }
     }
 }
 
@@ -312,6 +317,7 @@ function displayConfidenceMetrics(prediction) {
     const areaHighMetrics = metrics.area_quantile_high || {};
     const directionMetrics = metrics.direction || {};
     const fwiMetrics = metrics.fwi || {};
+    const distanceMetrics = metrics.distance || {};
 
     // Helper to determine FWI risk level and corresponding class
     const getFwiRiskLevel = (fwi) => {
@@ -367,7 +373,11 @@ function displayConfidenceMetrics(prediction) {
         <div class="metric-item">
             <h4>예상 확산 거리 (최악 시나리오 기준)</h4>
             <p><strong>예측 반경:</strong> ${consistent_distance_m.toFixed(2)} m</p>
-            <small>최악 시나리오 면적을 기반으로 계산된, 신뢰도 높은 확산 반경입니다.</small>
+            <div class="metric-detail">
+                <span>평균 오차 (MAE):</span>
+                <strong class="metric-value">${(parseFloat(distanceMetrics.mae) || 0).toFixed(2)} m</strong>
+            </div>
+            <small>최악 시나리오 면적 기반 확산 반경의 평균 오차입니다. (0에 가까울수록 좋음, 단위: m)</small>
         </div>
     `;
     container.innerHTML = metricsHTML;

@@ -136,6 +136,12 @@ header h1 {
   border-radius: 6px;
 }
 
+.prediction-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .map-container {
   background: white;
   padding: 20px;

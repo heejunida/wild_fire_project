@@ -106,7 +106,7 @@ public class FirePredictController extends HttpServlet {
                             return runPythonScript(requestId, ndviPy, lat, lng, fireDateForScript);
                         });
                         Future<JSONObject> treeFuture = executor.submit(() -> {
-                            statusMessages.put(requestId, "산림 피복 데이터 수집 중...");
+                            statusMessages.put(requestId, "실시간 데이터 수집 진행 중...");
                             return runPythonScript(requestId, treePy, lat, lng, String.valueOf(fireDate.getYear()));
                         });
 
@@ -120,7 +120,7 @@ public class FirePredictController extends HttpServlet {
                         executor.shutdownNow(); // Ensure executor is always shut down
                     }
 
-                    statusMessages.put(requestId, "5 / 7: 원시 데이터 병합 중입니다.");
+                    statusMessages.put(requestId, "데이터 병합 중입니다.");
                     JSONObject rawFeatures = new JSONObject();
                     rawFeatures.putAll(weatherData);
                     rawFeatures.putAll(demData);
@@ -130,11 +130,11 @@ public class FirePredictController extends HttpServlet {
                     // --- DEBUG: Print the JSON data being sent to the feature engineering script ---
                     System.out.println("DEBUG: JSON data for feature engineering:\n" + rawFeatures.toJSONString());
 
-                    statusMessages.put(requestId, "6 / 7: 특징 공학 처리 중입니다.");
+                    statusMessages.put(requestId, "데이터 처리 중입니다...");
                     JSONObject engineeredFeatures = runPythonScriptWithJsonInput(requestId, featEngPy, rawFeatures.toJSONString());
 
                     // --- Prediction ---
-                    statusMessages.put(requestId, "7 / 7: 산불 확산 예측 중입니다.");
+                    statusMessages.put(requestId, "산불 확산 예측 중입니다...");
                     finalResultJson = runPythonScriptWithJsonInput(requestId, predPy, engineeredFeatures.toJSONString());
 
                     // --- FIX: Load performance metrics and add them to the final JSON ---

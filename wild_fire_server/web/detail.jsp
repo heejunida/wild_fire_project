@@ -57,7 +57,7 @@
                     </div>
                     
                     <div class="prediction-controls" style="display: none;">
-                        <label for="durationSelect">예측 기간</label>
+                        <label for="durationSelect">경과 시간</label>
                         <select id="durationSelect">
                             <option value="3">3시간</option>
                             <option value="6">6시간</option>
@@ -69,12 +69,14 @@
                 </div>
                 <div class="map-container">
                     <h3>산불 확산 속도 및 범위</h3>
+                    <p><현재 시각 기준으로 산불이 확산될 경우의 예상 규모를 알고 싶다면, 지도에서 위치를 클릭해보세요!></p>
                     <div id="map"></div>
                 </div>
             </div>
             <div class="chart-area">
                 <div class="chart-container">
                     <h3>시간별 확산 변화</h3>
+                    <p>산불 규모 예측 후 시간별 확산 변화 그래프가 띄워집니다!</p>
                     <canvas id="distanceChart" width="600" height="300"></canvas>
                 </div>
             </div>

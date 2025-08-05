@@ -92,17 +92,17 @@
                 <div class="zone-card danger">
                     <h3>강릉시</h3>
                     <p>위험도: <span>높음</span></p>
-                    <p>예상 피해 면적: 120 ha</p>
+                    <p>예상 피해 면적: 0.6 ha</p>
                 </div>
                 <div class="zone-card warning">
                     <h3>삼척시</h3>
                     <p>위험도: <span>보통</span></p>
-                    <p>예상 피해 면적: 85 ha</p>
+                    <p>예상 피해 면적: 0.2 ha</p>
                 </div>
                 <div class="zone-card danger">
                     <h3>동해시</h3>
                     <p>위험도: <span>높음</span></p>
-                    <p>예상 피해 면적: 103 ha</p>
+                    <p>예상 피해 면적: 0.4 ha</p>
                 </div>
             </div>
         </section>
