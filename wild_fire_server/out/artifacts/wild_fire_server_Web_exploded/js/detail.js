@@ -375,7 +375,7 @@ function displayConfidenceMetrics(prediction) {
             <p><strong>예측 반경:</strong> ${consistent_distance_m.toFixed(2)} m</p>
             <div class="metric-detail">
                 <span>평균 오차 (MAE):</span>
-                <strong class="metric-value">${(parseFloat(distanceMetrics.mae) || 0).toFixed(2)} m</strong>
+                <strong class="metric-value">${(parseFloat(distanceMetrics.mae) || 0).toFixed(3)}</strong>
             </div>
             <small>최악 시나리오 면적 기반 확산 반경의 평균 오차입니다. (0에 가까울수록 좋음, 단위: m)</small>
         </div>
