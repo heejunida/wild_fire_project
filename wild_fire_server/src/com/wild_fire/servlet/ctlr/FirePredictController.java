@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 @WebServlet("/fire-predict")
 public class FirePredictController extends HttpServlet {
@@ -86,20 +86,39 @@ public class FirePredictController extends HttpServlet {
                     String ndviPy = clientBasePath + "auto_collection/forest_data/ndvi_modis.py";
                     String treePy = clientBasePath + "auto_collection/forest_data/hgfc.py";
                     String featEngPy = clientBasePath + "auto_collection/feature_engineering.py";
-                    String predPy = clientBasePath + "predict_all.py"; // Use the new unified prediction script
+                    String predPy = clientBasePath + "predict_all.py";
 
-                    // --- Data Collection and Feature Engineering ---
-                    statusMessages.put(requestId, "1 / 7: 기후 데이터 수집 중입니다.");
-                    JSONObject weatherData = runPythonScript(requestId, weatherPy, lat, lng, fireDateForScript, fireTimeStr.split(":")[0]);
+                    // --- FIX: Parallel Data Collection ---
+                    ExecutorService executor = Executors.newFixedThreadPool(4);
+                    JSONObject weatherData, demData, ndviData, treeData;
 
-                    statusMessages.put(requestId, "2 / 7: 지형 데이터 수집 중입니다.");
-                    JSONObject demData = runPythonScript(requestId, demPy, lat, lng);
+                    try {
+                        Future<JSONObject> weatherFuture = executor.submit(() -> {
+                            statusMessages.put(requestId, "기후 데이터 수집 중...");
+                            return runPythonScript(requestId, weatherPy, lat, lng, fireDateForScript, fireTimeStr.split(":")[0]);
+                        });
+                        Future<JSONObject> demFuture = executor.submit(() -> {
+                            statusMessages.put(requestId, "지형 데이터 수집 중...");
+                            return runPythonScript(requestId, demPy, lat, lng);
+                        });
+                        Future<JSONObject> ndviFuture = executor.submit(() -> {
+                            statusMessages.put(requestId, "NDVI 데이터 수집 중...");
+                            return runPythonScript(requestId, ndviPy, lat, lng, fireDateForScript);
+                        });
+                        Future<JSONObject> treeFuture = executor.submit(() -> {
+                            statusMessages.put(requestId, "산림 피복 데이터 수집 중...");
+                            return runPythonScript(requestId, treePy, lat, lng, String.valueOf(fireDate.getYear()));
+                        });
 
-                    statusMessages.put(requestId, "3 / 7: NDVI 데이터 수집 중입니다.");
-                    JSONObject ndviData = runPythonScript(requestId, ndviPy, lat, lng, fireDateForScript);
+                        // Retrieve results from futures
+                        weatherData = weatherFuture.get();
+                        demData = demFuture.get();
+                        ndviData = ndviFuture.get();
+                        treeData = treeFuture.get();
 
-                    statusMessages.put(requestId, "4 / 7: 산림 피복 데이터 수집 중입니다.");
-                    JSONObject treeData = runPythonScript(requestId, treePy, lat, lng, String.valueOf(fireDate.getYear()));
+                    } finally {
+                        executor.shutdownNow(); // Ensure executor is always shut down
+                    }
 
                     statusMessages.put(requestId, "5 / 7: 원시 데이터 병합 중입니다.");
                     JSONObject rawFeatures = new JSONObject();
@@ -108,6 +127,9 @@ public class FirePredictController extends HttpServlet {
                     rawFeatures.putAll(ndviData);
                     rawFeatures.putAll(treeData);
 
+                    // --- DEBUG: Print the JSON data being sent to the feature engineering script ---
+                    System.out.println("DEBUG: JSON data for feature engineering:\n" + rawFeatures.toJSONString());
+
                     statusMessages.put(requestId, "6 / 7: 특징 공학 처리 중입니다.");
                     JSONObject engineeredFeatures = runPythonScriptWithJsonInput(requestId, featEngPy, rawFeatures.toJSONString());
 
@@ -115,19 +137,25 @@ public class FirePredictController extends HttpServlet {
                     statusMessages.put(requestId, "7 / 7: 산불 확산 예측 중입니다.");
                     finalResultJson = runPythonScriptWithJsonInput(requestId, predPy, engineeredFeatures.toJSONString());
 
+                    // --- FIX: Load performance metrics and add them to the final JSON ---
+                    if ("success".equals(finalResultJson.get("status"))) {
+                        Map<String, Map<String, String>> performanceMetrics = loadPerformanceMetrics(clientBasePath + "model_performance_summary.csv");
+                        finalResultJson.put("performance_metrics", performanceMetrics);
+                    }
+
                     // --- Database Insertion ---
                     if (userId != null && "success".equals(finalResultJson.get("status"))) {
                         System.out.println("Attempting to save prediction to database for user: " + userId);
                         UserWildfirePredictionDAO dao = new UserWildfirePredictionDAO();
                         Map<String, Object> dbParams = new HashMap<>();
-                        dbParams.put("U_ID", userId);
+                        dbParams.put("U_ID", uId); // <-- FIX: Pass the numeric uId, not the string userId
 
                         LocalDateTime ldt = LocalDateTime.parse(fireDateStr + " " + fireTimeStr, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
                         dbParams.put("FIRE_DATETIME", Timestamp.valueOf(ldt));
                         dbParams.put("LATITUDE", Double.parseDouble(lat));
                         dbParams.put("LONGITUDE", Double.parseDouble(lng));
                         dbParams.put("FEATURES_JSON", engineeredFeatures.toJSONString());
-                        dbParams.put("AREA_PRED", finalResultJson.get("area_pred"));
+                        dbParams.put("AREA_PRED", finalResultJson.get("area_pred_median")); // <-- FIX: Use the correct key for the median prediction
                         dbParams.put("FWI_PRED", finalResultJson.get("fwi_pred"));
                         dbParams.put("DIR_PRED", finalResultJson.get("dir_pred"));
                         dbParams.put("DISTANCE_PRED", finalResultJson.get("distance_pred"));
@@ -167,12 +195,11 @@ public class FirePredictController extends HttpServlet {
     }
 
     private static JSONObject runPythonScript(String requestId, String pyPath, String... params) throws Exception {
-        String[] cmd = new String[params.length + 2];
-        cmd[0] = "python3";
-        cmd[1] = pyPath;
-        System.arraycopy(params, 0, cmd, 2, params.length);
+        String pythonExecutable = "/opt/anaconda3/bin/python";
+        // Construct the full command to be executed by the shell
+        String command = pythonExecutable + " " + pyPath + " " + String.join(" ", params);
 
-        ProcessBuilder pb = new ProcessBuilder(cmd);
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", command);
         pb.directory(new File("/Users/heejunida/wild_fire_project/wild_fire_client/"));
         Process process = pb.start();
         activeProcesses.put(requestId, process);
@@ -187,13 +214,24 @@ public class FirePredictController extends HttpServlet {
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IOException("Script '" + pyPath + "' failed with exit code " + exitCode);
+            // Read stderr for more detailed error info
+            StringBuilder errorOutput = new StringBuilder();
+            try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                String line;
+                while ((line = errorReader.readLine()) != null) {
+                    errorOutput.append(line).append("\n");
+                }
+            }
+            throw new IOException("Script '" + pyPath + "' failed with exit code " + exitCode + ". Stderr: " + errorOutput.toString());
         }
         return (JSONObject) new JSONParser().parse(output.toString());
     }
 
     private static JSONObject runPythonScriptWithJsonInput(String requestId, String pyPath, String jsonInput) throws Exception {
-        ProcessBuilder pb = new ProcessBuilder("python3", pyPath);
+        String pythonExecutable = "/opt/anaconda3/bin/python";
+        String command = pythonExecutable + " " + pyPath;
+
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", command);
         pb.directory(new File("/Users/heejunida/wild_fire_project/wild_fire_client/"));
         Process process = pb.start();
         activeProcesses.put(requestId, process);
@@ -212,7 +250,14 @@ public class FirePredictController extends HttpServlet {
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IOException("Script '" + pyPath + "' failed with exit code " + exitCode);
+            StringBuilder errorOutput = new StringBuilder();
+            try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                String line;
+                while ((line = errorReader.readLine()) != null) {
+                    errorOutput.append(line).append("\n");
+                }
+            }
+            throw new IOException("Script '" + pyPath + "' failed with exit code " + exitCode + ". Stderr: " + errorOutput.toString());
         }
         return (JSONObject) new JSONParser().parse(output.toString());
     }
@@ -240,5 +285,34 @@ public class FirePredictController extends HttpServlet {
             out.flush();
             out.close();
         }
+    }
+
+    private static Map<String, Map<String, String>> loadPerformanceMetrics(String csvFilePath) {
+        Map<String, Map<String, String>> metrics = new HashMap<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(csvFilePath))) {
+            String line;
+            String[] headers = null;
+            boolean isFirstLine = true;
+            while ((line = br.readLine()) != null) {
+                if (isFirstLine) {
+                    headers = line.split(",");
+                    isFirstLine = false;
+                    continue;
+                }
+                String[] values = line.split(",");
+                String modelName = values[0];
+                Map<String, String> modelMetrics = new HashMap<>();
+                for (int i = 1; i < headers.length; i++) {
+                    if (i < values.length && !values[i].isEmpty()) {
+                        modelMetrics.put(headers[i], values[i]);
+                    }
+                }
+                metrics.put(modelName, modelMetrics);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            // Return an empty map or handle the error as needed
+        }
+        return metrics;
     }
 }

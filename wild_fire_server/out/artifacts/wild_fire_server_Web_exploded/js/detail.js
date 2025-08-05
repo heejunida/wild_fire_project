@@ -4,7 +4,13 @@
 document.addEventListener("DOMContentLoaded", () => {
     setupHamburgerMenu();
     setupHeaderScroll();
-    window.addEventListener('load', initMap);
+    
+    // --- FIX: Use the 'load' event AND a short timeout ---
+    // This is the most robust way to ensure the map container has its final, stable dimensions
+    // before the Kakao Maps API initializes its coordinate system.
+    window.addEventListener('load', () => {
+        setTimeout(initMap, 100); // A small 100ms delay to ensure rendering is complete
+    });
 });
 
 // Global variables
@@ -35,25 +41,42 @@ function initMap() {
     const mapOption = { center: new kakao.maps.LatLng(37.8228, 128.1555), level: 9 };
     mapInstance = new kakao.maps.Map(mapContainer, mapOption);
 
-    mapInstance.relayout();
+    // Use the 'idle' event to ensure the map is fully rendered and stable
+    kakao.maps.event.addListener(mapInstance, 'idle', function setupEventListenersOnce() {
+        // This listener will run only once
+        kakao.maps.event.removeListener(mapInstance, 'idle', setupEventListenersOnce);
+        
+        // Now that the map is stable, call relayout.
+        mapInstance.relayout();
+        
+        // --- FIX: All event listeners are now set up *after* the map is guaranteed to be stable ---
+        setupMapEventListeners(mapInstance);
+    });
+}
 
+// This function now sets up ALL event listeners related to the map
+function setupMapEventListeners(map) {
     let lastStatusMessage = '';
 
-    kakao.maps.event.addListener(mapInstance, 'click', async (mouseEvent) => {
+    kakao.maps.event.addListener(map, 'click', async (mouseEvent) => {
         if (!window.loginUserId) {
             return alert("로그인이 필요합니다.");
         }
-        const latlng = mouseEvent.latLng;
+        
+        const clickedPosition = mouseEvent.latLng;
+        const latitude = clickedPosition.getLat();
+        const longitude = clickedPosition.getLng();
 
-        // --- DEBUGGING STEP 1: Log the coordinates ---
-        console.log("Clicked coordinates:", latlng.getLat(), latlng.getLng());
+        console.log("Clicked coordinates (stable):", latitude, longitude);
 
-        resetMapAndUI(mapInstance, false);
-        clickMarker = new kakao.maps.Marker({ position: latlng, map: mapInstance });
-        currentPredictionCenter = latlng;
+        resetMapAndUI(map, false);
+        
+        const stableLatLng = new kakao.maps.LatLng(latitude, longitude);
+        clickMarker = new kakao.maps.Marker({ position: stableLatLng, map: map });
+        currentPredictionCenter = stableLatLng;
 
-        mapInstance.setCenter(latlng);
-        mapInstance.setLevel(4);
+        map.setCenter(stableLatLng);
+        map.setLevel(4);
 
         document.getElementById("loadingOverlay").style.display = "flex";
         const loadingText = document.querySelector("#loadingOverlay p");
@@ -65,16 +88,20 @@ function initMap() {
 
         try {
             const now = new Date();
+            now.setDate(now.getDate() - 4);
             const fireDate = now.toISOString().slice(0, 10);
             const fireTime = now.toTimeString().slice(0, 5);
 
-            const response = await fetch(`/fire-predict?lat=${latlng.getLat()}&lng=${latlng.getLng()}&fireDate=${fireDate}&fireTime=${fireTime}&requestId=${requestId}&userId=${window.loginUserId}`, { signal: abortController.signal });
+            console.log(`[DEBUG] Sending to server -> Lat: ${latitude}, Lng: ${longitude}`);
+
+            const response = await fetch(`/fire-predict?lat=${latitude}&lng=${longitude}&fireDate=${fireDate}&fireTime=${fireTime}&requestId=${requestId}&userId=${window.loginUserId}`, { signal: abortController.signal });
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
             await response.json();
-            pollPredictionResult(requestId, latlng);
+            pollPredictionResult(requestId, stableLatLng);
         } catch (error) {
             if (error.name !== 'AbortError') console.error("Error fetching fire prediction:", error);
-            resetMapAndUI(mapInstance);
+            resetMapAndUI(map);
         }
     });
 
@@ -96,10 +123,10 @@ function initMap() {
                     pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
                 } else if (prediction.status === "success") {
                     currentPredictionData = { ...prediction, requestId };
-                    displayFullPrediction(mapInstance, latlng, prediction);
+                    displayFullPrediction(map, latlng, prediction);
                 } else {
                     console.error("Server-side prediction error:", prediction.error);
-                    resetMapAndUI(mapInstance);
+                    resetMapAndUI(map);
                 }
             })
             .catch(err => {
@@ -107,15 +134,16 @@ function initMap() {
                 if (tryCount < 40) {
                     pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
                 } else {
-                    resetMapAndUI(mapInstance);
+                    resetMapAndUI(map);
                 }
             });
     }
 
-    document.getElementById("cancelPredictionBtn").addEventListener("click", () => handleCancel(mapInstance));
-    document.getElementById("selectRegionBtn").addEventListener("click", () => handleRegionSelect(mapInstance));
-    document.getElementById("resetBtn").addEventListener("click", () => resetMapAndUI(mapInstance, true));
-    document.getElementById("durationSelect").addEventListener("change", () => handleDurationChange(mapInstance));
+    // --- FIX: Moved button event listeners here to ensure mapInstance is stable ---
+    document.getElementById("cancelPredictionBtn").addEventListener("click", () => handleCancel(map));
+    document.getElementById("selectRegionBtn").addEventListener("click", () => handleRegionSelect(map));
+    document.getElementById("resetBtn").addEventListener("click", () => resetMapAndUI(map, true));
+    document.getElementById("durationSelect").addEventListener("change", () => handleDurationChange(map));
 }
 
 let resizeTimer;
@@ -125,7 +153,8 @@ window.addEventListener('resize', () => {
 });
 
 function displayFullPrediction(map, latlng, prediction) {
-    const finalAreaHa = prediction.area_pred_median;
+    // --- FIX: Base the primary visualization on the high-end (worst-case) prediction ---
+    const finalAreaHa = prediction.area_pred_high; 
     const speedCategory = fwiToSpeedCategory(prediction.fwi_pred);
     const windDirection = prediction.dir_pred * 45;
 
@@ -179,7 +208,8 @@ function handleRegionSelect(map) {
 function handleDurationChange(map) {
     if (!currentPredictionData || !currentPredictionCenter) return;
     const selectedDuration = parseInt(document.getElementById("durationSelect").value);
-    const finalAreaHa = currentPredictionData.area_pred_median;
+    // --- FIX: Base the primary visualization on the high-end (worst-case) prediction ---
+    const finalAreaHa = currentPredictionData.area_pred_high;
     const windDirection = currentPredictionData.dir_pred * 45;
     const speedCategory = fwiToSpeedCategory(currentPredictionData.fwi_pred);
 
@@ -255,14 +285,16 @@ function displayFirePrediction(map, centerLat, centerLon, predicted_distance_m, 
 }
 
 function displayInfoOverlay(map, position, prediction, area_ha_override = null, distance_m_override = null) {
-    const area_ha = area_ha_override ?? prediction.area_pred_median;
-    const distance_m = distance_m_override ?? Math.sqrt(area_ha * 10000 / Math.PI);
+    // --- FIX: The primary displayed area should be the high-end prediction to match the map ---
+    const area_ha = area_ha_override ?? prediction.area_pred_high;
+    // --- FIX: The distance displayed should ALSO be derived from the high-end area prediction for consistency ---
+    const distance_m = distance_m_override ?? Math.sqrt(prediction.area_pred_high * 10000 / Math.PI);
     const speedCategory = fwiToSpeedCategory(prediction.fwi_pred);
     const windDirection = prediction.dir_pred * 45;
     const speedText = {0: '낮음', 1: '중간', 2: '높음'};
     const windText = windDirection <= -999.0 ? 'N/A' : `${windDirection.toFixed(1)}°`;
 
-    const content = `<div class="info-overlay"><h4>예측 정보</h4><ul>` +
+    const content = `<div class="info-overlay"><h4>예측 정보 (최악 시나리오 기준)</h4><ul>` +
         `<li><strong>예상 피해 면적:</strong> ${area_ha.toFixed(2)} ha <span class="confidence-range">(범위: ${prediction.area_pred_low.toFixed(2)} - ${prediction.area_pred_high.toFixed(2)} ha)</span></li>` +
         `<li><strong>예상 확산 거리:</strong> ${distance_m.toFixed(1)} m</li>` +
         `<li><strong>주요 확산 방향:</strong> ${windText}</li>` +
@@ -275,27 +307,67 @@ function displayConfidenceMetrics(prediction) {
     const container = document.getElementById("confidenceMetrics");
     if (!container) return;
 
+    const metrics = prediction.performance_metrics || {};
+    const areaMedianMetrics = metrics.area_quantile_median || {};
+    const areaHighMetrics = metrics.area_quantile_high || {};
+    const directionMetrics = metrics.direction || {};
+    const fwiMetrics = metrics.fwi || {};
+
+    // Helper to determine FWI risk level and corresponding class
+    const getFwiRiskLevel = (fwi) => {
+        if (fwi < 5) return { level: '낮음', className: 'low' };
+        if (fwi < 13) return { level: '보통', className: 'moderate' };
+        if (fwi < 31) return { level: '높음', className: 'high' };
+        return { level: '위험', className: 'extreme' };
+    };
+
+    const fwiValue = prediction.fwi_pred;
+    const fwiRisk = getFwiRiskLevel(fwiValue);
+    
+    // --- FIX: Calculate the consistent distance from the high-end area prediction ---
+    const consistent_distance_m = Math.sqrt(prediction.area_pred_high * 10000 / Math.PI);
+
     const metricsHTML = `
         <div class="metric-item">
-            <h4>면적 예측 (Area Prediction)</h4>
-            <p><strong>가장 가능성 높은 예측 (Median):</strong> ${prediction.area_pred_median.toFixed(2)} ha</p>
-            <p><strong>예측 신뢰 구간 (Confidence Range):</strong> ${prediction.area_pred_low.toFixed(2)} - ${prediction.area_pred_high.toFixed(2)} ha</p>
-            <small>모델은 80% 확률로 실제 피해 면적이 이 범위 내에 있을 것으로 예측합니다.</small>
+            <h4>피해 면적 (최악 시나리오)</h4>
+            <p><strong>예측값:</strong> ${prediction.area_pred_high.toFixed(2)} ha</p>
+            <div class="metric-detail">
+                <span>모델 설명력 (R²):</span>
+                <strong class="metric-value">${(parseFloat(areaHighMetrics.r2) || 0).toFixed(3)}</strong>
+            </div>
+            <small>이 모델이 '왜 대형산불로 번지는가'를 설명하는 능력입니다. (1에 가까울수록 좋음)</small>
+        </div>
+        <div class="metric-item">
+            <h4>피해 면적 (평균 시나리오)</h4>
+            <p><strong>예측값:</strong> ${prediction.area_pred_median.toFixed(2)} ha</p>
+            <div class="metric-detail">
+                <span>평균 오차 (MAE):</span>
+                <strong class="metric-value">${(parseFloat(areaMedianMetrics.mae) || 0).toFixed(3)}</strong>
+            </div>
+            <small>예측값과 실제값의 평균적인 차이입니다. (0에 가까울수록 좋음, log scale 기준)</small>
+        </div>
+        <div class="metric-item">
+            <h4>확산 방향</h4>
+            <p><strong>예측값:</strong> ${(prediction.dir_pred * 45)}°</p>
+            <div class="metric-detail">
+                <span>종합 정확도 (F1-Score):</span>
+                <strong class="metric-value">${(parseFloat(directionMetrics.f1_weighted) || 0).toFixed(3)}</strong>
+            </div>
+            <small>모델이 8개 방향을 얼마나 균형있게 잘 맞추는지를 나타냅니다. (1에 가까울수록 좋음)</small>
         </div>
         <div class="metric-item">
             <h4>산불위험지수 (FWI)</h4>
-            <p><strong>예측된 위험 지수:</strong> ${prediction.fwi_pred.toFixed(2)}</p>
+            <p><strong>예측값:</strong> ${fwiValue.toFixed(2)} <span class="risk-level ${fwiRisk.className}">${fwiRisk.level}</span></p>
+            <div class="metric-detail">
+                <span>모델 설명력 (R²):</span>
+                <strong class="metric-value">${(parseFloat(fwiMetrics.r2) || 0).toFixed(3)}</strong>
+            </div>
             <small>날씨가 화재에 얼마나 유리한지를 나타내는 종합 점수입니다.</small>
         </div>
         <div class="metric-item">
-            <h4>주요 확산 방향 (Direction)</h4>
-            <p><strong>예측 방향:</strong> ${prediction.dir_pred * 45}°</p>
-            <small>8방위 중 가장 가능성이 높은 바람의 방향입니다.</small>
-        </div>
-        <div class="metric-item">
-            <h4>예상 확산 거리 (Distance)</h4>
-            <p><strong>예측 반경:</strong> ${prediction.distance_pred.toFixed(2)} m</p>
-            <small>화재 중심으로부터의 평균 최종 확산 반경에 대한 독립적인 예측입니다.</small>
+            <h4>예상 확산 거리 (최악 시나리오 기준)</h4>
+            <p><strong>예측 반경:</strong> ${consistent_distance_m.toFixed(2)} m</p>
+            <small>최악 시나리오 면적을 기반으로 계산된, 신뢰도 높은 확산 반경입니다.</small>
         </div>
     `;
     container.innerHTML = metricsHTML;
@@ -332,6 +404,7 @@ function setupHamburgerMenu() {
         sideMenu.classList.toggle("active");
         hamburger.classList.toggle("active");
         if (mapInstance) {
+            // --- FIX: Call relayout after a short delay to allow the CSS transition to finish ---
             setTimeout(() => mapInstance.relayout(), 350); 
         }
     });

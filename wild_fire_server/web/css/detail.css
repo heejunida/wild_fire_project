@@ -546,3 +546,76 @@ body.shifted {
     color: #555;
     font-style: italic;
 }
+
+/* --- NEW: Styles for FWI Risk Level Badge --- */
+.risk-level {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 12px;
+    color: white;
+    margin-left: 8px;
+    vertical-align: middle;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+}
+
+.risk-level.low {
+    background-color: #FFC107; /* Yellow/Amber */
+    color: #333; /* Darker text for yellow background */
+    text-shadow: none;
+}
+
+.risk-level.moderate {
+    background-color: #FF9800; /* Orange */
+}
+
+.risk-level.high {
+    background-color: #F44336; /* Red */
+}
+
+.risk-level.extreme {
+    background-color: #D32F2F; /* Darker Red */
+}
+
+/* --- NEW: Styles for R² Progress Bar --- */
+.metric-detail {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.metric-detail span {
+    font-weight: 500;
+}
+
+.metric-value {
+    font-size: 1.1em;
+}
+
+.progress-bar-container {
+    width: 100px;
+    height: 20px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--accent-2);
+    border-radius: 10px;
+}
+
+.progress-bar-container span {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    line-height: 20px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+}

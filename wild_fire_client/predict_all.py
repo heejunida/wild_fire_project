@@ -22,10 +22,8 @@ def load_artifacts(model_name_key):
     """Loads model and preprocessing artifacts for a given model key."""
     model_file_name = MODELS[model_name_key]
     try:
-        if 'area' in model_name_key:
-            artifact_name = 'area_quantile_median'
-        else:
-            artifact_name = model_file_name
+        # --- FIX: Each model should load its OWN artifacts ---
+        artifact_name = model_file_name
 
         model_path = os.path.join(BASE_DIR, f'{model_file_name}_model.joblib')
         imputer_path = os.path.join(BASE_DIR, f'{artifact_name}_imputer.joblib')

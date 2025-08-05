@@ -80,11 +80,10 @@
             </div>
         </div>
 
-        <!-- --- FIX: Replaced the old chart with the new model confidence section --- -->
         <section id="modelConfidence" class="confidence-section">
             <h3>모델 예측 신뢰도</h3>
             <div id="confidenceMetrics" class="metrics-container">
-                <!-- JavaScript will populate this area -->
+                <!-- Populated by detail.js -->
             </div>
         </section>
 

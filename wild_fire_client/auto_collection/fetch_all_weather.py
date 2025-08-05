@@ -7,7 +7,7 @@ import traceback
 import time
 
 # --- Centralized NASA POWER API Parameters ---
-NASA_HOURLY_PARAMS = "T2M,RH2M,WS2M,WD2M,PRECTOTCORR,PS,ALLSKY_SFC_SW_DWN,WS10M,WD10M"
+NASA_HOURLY_PARAMS = "T2M,RH2M,WS2M,WD2M,PRECTOTCORR,PS,WS10M,WD10M"
 NASA_DAILY_PRECIP_PARAM = "PRECTOTCORR"
 
 # --- FIX: New helper function to make the output JSON-compliant ---
