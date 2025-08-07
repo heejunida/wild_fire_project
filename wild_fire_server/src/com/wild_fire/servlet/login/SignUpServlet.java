@@ -21,48 +21,52 @@ public class SignUpServlet extends HttpServlet {
         String userRawPw = request.getParameter("user_pw");
         String userName = request.getParameter("user_name");
 
-        Connection conn = null;
-        PreparedStatement pstmt = null;
+        // 입력값 검증
+        if (userId == null || userId.trim().isEmpty() || 
+            userRawPw == null || userRawPw.isEmpty() || 
+            userName == null || userName.trim().isEmpty()) {
+            
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"result\": \"fail\", \"message\": \"모든 필드를 입력해주세요.\"}");
+            return;
+        }
 
-        try {
-            // DB 연결 (본인 환경 맞게 수정)
-            Properties props = new Properties();
-            try (InputStream in = getClass().getClassLoader().getResourceAsStream("main/resources/db.properties")) {
-                props.load(in);
-            }
+        String userHashedPw = BCrypt.hashpw(userRawPw, BCrypt.gensalt());
+        String sql = "INSERT INTO users (u_id, user_id, user_pw, user_name) VALUES (users_seq.NEXTVAL, ?, ?, ?)";
 
-            String driver = props.getProperty("db.driver");
-            String url = props.getProperty("db.url");
-            String user = props.getProperty("db.user");
-            String password = props.getProperty("db.password");
+        // try-with-resources를 사용하여 DB 연결 및 자원 자동 해제
+        try (Connection conn = com.wild_fire.util.DBUtil.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            Class.forName(driver);
-            conn = DriverManager.getConnection(url, user, password);
+            // AutoCommit 비활성화 (명시적 트랜잭션 관리)
+            conn.setAutoCommit(false);
 
-            // 회원 정보 insert
-            out.print(userId);
-            out.print(userRawPw);
-            out.print(userName);
-            String userPw = BCrypt.hashpw(userRawPw, BCrypt.gensalt());
-            String sql = "INSERT INTO users (u_id, user_id, user_pw, user_name) VALUES (users_seq.NEXTVAL, ?, ?, ?)";
-            pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, userId);
-            pstmt.setString(2, userPw);
+            pstmt.setString(2, userHashedPw);
             pstmt.setString(3, userName);
 
             int result = pstmt.executeUpdate();
-            response.setContentType("application/json");
+            response.setContentType("application/json; charset=UTF-8");
+
             if (result > 0) {
+                conn.commit(); // ★★★ 변경 사항을 데이터베이스에 최종 확정
+                System.out.println("회원가입 성공 및 커밋 완료: " + userId);
                 response.getWriter().write("{\"result\": \"success\"}");
             } else {
-                response.getWriter().write("{\"result\": \"fail\"}");
+                conn.rollback(); // 실패 시 롤백
+                response.getWriter().write("{\"result\": \"fail\", \"message\": \"회원가입에 실패했습니다.\"}");
             }
+
+        } catch (java.sql.SQLIntegrityConstraintViolationException e) {
+            // 아이디나 이메일 중복 시 발생하는 예외
+            e.printStackTrace();
+            response.setStatus(HttpServletResponse.SC_CONFLICT); // 409 Conflict
+            response.getWriter().write("{\"result\": \"fail\", \"message\": \"이미 존재하는 아이디입니다.\"}");
+        
         } catch (Exception e) {
             e.printStackTrace();
-            response.getWriter().write("{\"result\": \"error\"}");
-        } finally {
-            try { if (pstmt != null) pstmt.close(); } catch (Exception e) {}
-            try { if (conn != null) conn.close(); } catch (Exception e) {}
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"result\": \"error\", \"message\": \"서버 오류가 발생했습니다.\"}");
         }
     }
 }

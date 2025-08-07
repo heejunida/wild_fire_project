@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>산불과 기후 변화 Q&A</title>
+    <style>
+        :root {
+            --bg-main: #fefcf8;
+            --bg-section: #f5efe7;
+            --bg-highlight: #ede0d4;
+            --bg-header: #6b4226;
+            --bg-footer: #4e342e;
+
+            --text-main: #3e2c23;
+            --text-light: #fdfaf6;
+
+            --accent-1: #d6bfa8;
+            --accent-2: #c9a27e;
+            --accent-3: #ffb84d;
+        }
+
+        @font-face {
+            font-family: 'Paperlogy-8ExtraBold';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-8ExtraBold.woff2') format('woff2');
+            font-weight: 600;
+            font-style: normal;
+        }
+
+        body {
+            font-family: 'Paperlogy-8ExtraBold', sans-serif;
+            background: linear-gradient(rgba(40, 30, 10, 0.38), rgba(40, 30, 10, 0.38)), url("{{ url_for('static', filename='img/_.jpeg') }}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            margin: 0;
+            padding: 0;
+        }
+
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            cursor: pointer;
+            color: var(--bg-header);
+        }
+
+        header {
+            font-family: 'Paperlogy-8ExtraBold', sans-serif;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 999;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background-color: var(--bg-main);
+            color: var(--text-light);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            transition: top 0.4s ease-in-out;
+        }
+        header.hide {
+            top: -100px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 750px;
+            background: rgba(250, 246, 240, 0.85);
+            margin: 92px auto 40px auto;
+            border-radius: 24px;
+            box-shadow: 0 4px 20px 0 rgba(140, 80, 40, 0.09);
+            backdrop-filter: blur(1.5px);
+            padding: 38px 48px 32px 48px;  /* 패딩도 넉넉하게 */
+            border: 1.5px solid #e6d9c3;
+        }
+
+        .qa-item {
+            margin-bottom: 20px;
+            border-radius: 18px;
+            border: none;
+            background: #f5efe7;
+            box-shadow: 0 2px 8px 0 rgba(180, 120, 60, 0.07);
+            transition: box-shadow 0.15s, background 0.22s;
+        }
+
+        .qa-item.active {
+            box-shadow: 0 6px 22px 0 rgba(180, 120, 60, 0.15);
+            background: #fbeedc;
+        }
+
+        .qa-question {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: none;
+            font-size: 1.10em;
+            color: #7d5c29;
+            font-weight: 600;
+            border: none;
+            outline: none;
+            padding: 18px 24px;
+            border-radius: 15px;
+            transition: background 0.17s, color 0.15s;
+            box-shadow: none;
+        }
+
+        .qa-item.active .qa-question {
+            color: #704815;
+            background: #f9efdd;
+        }
+
+        .qa-question::before {
+            content: "❓";
+            font-size: 1.13em;
+            margin-right: 8px;
+            opacity: 0.75;
+        }
+
+        .qa-item.active .qa-question::before {
+            content: "👇";
+            font-size: 1.15em;
+            opacity: 0.95;
+        }
+
+        .qa-question:hover {
+            background: #ede0d4;
+            color: #4e342e;
+        }
+
+        .qa-answer {
+            display: none;
+            background: #fffdfa;
+            padding: 20px 34px 24px 38px;
+            font-family: 'Noto Sans KR', sans-serif;
+            color: #3b3021;
+            font-size: 0.94em;
+            border-top: 1px solid #ecd8bb;
+            line-height: 1.78;
+            animation: fadeIn 0.18s;
+        }
+
+        .qa-item.active .qa-answer {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 버튼, 강조 등 원하는 곳에 */
+        .btn-brown {
+            background: #9e6f3e;
+            color: #fff;
+            border-radius: 12px;
+            padding: 10px 22px;
+            font-weight: 600;
+            border: none;
+            font-size: 1.02em;
+            box-shadow: 0 2px 8px 0 rgba(100, 50, 0, 0.08);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-brown:hover {
+            background: #7d5c29;
+        }
+
+        .select {
+            position: relative;
+            display: inline-block;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .select button {
+            padding: 12px 18px;
+            background-color: var(--accent-2);
+            font-family: 'Paperlogy-8ExtraBold', sans-serif;
+            border: none;
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .select button:hover {
+            color: var(--accent-2);
+            background-color: var(--text-main);
+            box-shadow: 0 4px 16px 0 rgba(120, 80, 40, 0.18);
+        }
+
+        .wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .site-footer {
+            background-color: var(--bg-section);
+            color: var(--bg-footer);
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 14px;
+            margin-bottom: 0;
+            margin-top: auto;
+        }
+
+        .footer-content p {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .footer-content .copyright {
+            margin-top: 20px;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <header>
+        <div class="logo" onclick="location.href='{{ url_for('main_page') }}'">SEED</div>
+        <div class="select">
+            <button onclick="location.href='{{ url_for('detail') }}'">예측 결과 분석</button>
+        </div>
+    </header>
+    <div class="container">
+        <h1>산불과 기후 변화 Q&A</h1>
+
+        <div class="qa-item">
+            <div class="qa-question">Q. 왜 우리가 이 산불 확산 예측 서비스를 하나요?</div>
+            <div class="qa-answer">
+                산불은 순식간에 대규모 피해를 내는 재난이지만, 확산 속도와 방향을 예측하면 더 빠르고 정확하게 대응할 수 있습니다.<br>
+                저희는 과학적 데이터를 바탕으로 산불 확산을 실시간 예측해, 더 많은 생명과 자산을 보호하고<br>
+                재난 대응의 ‘골든타임’을 확보하고자 이 서비스를 시작했습니다.
+            </div>
+        </div>
+
+        <div class="qa-item">
+            <div class="qa-question">Q. 기후 변화는 산불에 어떤 영향을 끼치나요?</div>
+            <div class="qa-answer">
+                기후 변화로 인한 고온·건조, 강수량 감소, 이상기후(폭염, 가뭄, 강풍 등)는 산림의 수분을 빼앗아<br>
+                산불 발생 위험을 크게 높입니다. 실제로 전 세계 산불 발생 빈도와 피해 면적은<br>
+                지난 20년간 30% 이상 증가했습니다.<br>
+                기후 변화는 산불의 “규모”, “빈도”, “확산 속도” 모두에 영향을 줍니다.
+            </div>
+        </div>
+        <div class="qa-item">
+            <div class="qa-question">Q. 왜 강원도에 집중하나요?</div>
+            <div class="qa-answer">
+                강원도는 전국에서 산불 발생 빈도가 가장 높고, 한 번 발생하면 피해 규모도 매우 큽니다.<br>
+                풍부한 산림, 강한 바람, 건조한 기후 등 산불 확산에 취약한 조건을 갖추고 있기 때문입니다.<br>
+                최근 10년간 대형 산불의 70% 이상이 강원도에서 발생했고, 그 피해는 인명·재산·생태계에 모두 막대한 영향을 주었습니다.<br>
+                그래서 저희 서비스는 <b>“가장 위험한 곳에서 가장 먼저”</b> 산불 확산 예측을 적용해 실질적인 도움을 주고자 합니다.
+            </div>
+        </div>
+
+        <div class="qa-item">
+            <div class="qa-question">Q. 산불 확산을 예측하면 어떤 점이 달라지나요?</div>
+            <div class="qa-answer">
+                예측이 가능해지면 진화 인력과 장비를 최적의 위치에 배치할 수 있고, 주민 대피를 더 안전하고 신속하게 할 수 있습니다.<br>
+                “확산 방향·속도”를 알면 피해를 최소화할 수 있고, 자원 낭비도 줄일 수 있습니다.
+            </div>
+        </div>
+
+        <div class="qa-item">
+            <div class="qa-question">Q. 산불이 늘어나는 진짜 원인은 뭔가요?</div>
+            <div class="qa-answer">
+                가장 큰 원인은 기후 변화입니다. <br>
+                게다가 도시화, 산림 관리 부족, 인위적 실화(담배꽁초, 불씨 등)도 복합적으로 작용합니다.<br>
+                최근엔 인간 활동보다도 기후적 요인이 더 중요하게 작용하는 사례가 많아지고 있습니다.
+            </div>
+        </div>
+
+        <div class="qa-item">
+            <div class="qa-question">Q. 우리나라는 안전한가요?</div>
+            <div class="qa-answer">
+                한국도 예외가 아닙니다. 실제로 강원도, 경상북도 등에서 대형 산불이 해마다 반복되고 있습니다.<br>
+                특히 봄철과 가을철, 기후가 건조할 때 위험이 급증합니다.<br>
+                미리 대비하지 않으면 피해가 더욱 커질 수 있습니다.
+            </div>
+        </div>
+
+        <div class="qa-item">
+            <div class="qa-question">Q. 지금 이 문제를 해결하지 않으면 어떻게 되나요?</div>
+            <div class="qa-answer">
+                산불 피해는 해마다 커지고, 산림이 소실되면 대기오염, 생태계 파괴, 미래 세대 건강까지 위협받게 됩니다.<br>
+                결국 우리 모두가 피해자가 될 수 있습니다.<br>
+                지금이 바로 문제를 바로잡아야 할 골든타임입니다.
+            </div>
+        </div>
+    </div>
+    <footer id="siteFooter" class="site-footer">
+        <div class="footer-content">
+            <p>© 2025 SEED. All rights reserved.</p>
+        </div>
+    </footer>
+</div>
+<script>
+    // 간단한 아코디언 기능
+    document.querySelectorAll('.qa-question').forEach(q => {
+        q.onclick = function () {
+            const item = q.parentElement;
+            item.classList.toggle('active');
+        };
+    });
+    const header = document.querySelector("header");
+    let lastToggleY = window.scrollY;
+    let ticking = false;
+    const scrollThreshold = 120;    // ← 민감도(높을수록 "휙" 내려야 반응)
+    const minScrollToHide = 150;    // ← 얼마만큼 스크롤해야 효과 시작
+
+    function handleScroll() {
+        const currentY = window.scrollY;
+        const delta = currentY - lastToggleY;
+
+        if (Math.abs(delta) >= scrollThreshold) {
+            if (delta > 0 && currentY > minScrollToHide) {
+                header.classList.add("hide");     // 내려가면 숨김
+            } else if (delta < 0) {
+                header.classList.remove("hide");  // 올리면 다시 나옴
+            }
+            lastToggleY = currentY;
+        }
+        ticking = false;
+    }
+
+    window.addEventListener("scroll", () => {
+        if (!ticking) {
+            window.requestAnimationFrame(handleScroll);
+            ticking = true;
+        }
+    });
+</script>
+</body>
+</html>

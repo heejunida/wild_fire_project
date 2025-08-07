@@ -1,13 +1,12 @@
-<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8"/>
     <title>산불 확산 예측 상세 정보</title>
-    <link rel="stylesheet" href="css/detail.css"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/detail.css') }}"/>
 </head>
 <script>
-    window.loginUserId = "<%= session.getAttribute("user") != null ? session.getAttribute("user") : "" %>";
+    window.loginUserId = "{{ user or '' }}";
 </script>
 <body>
     <div id="hamburgerBtn">☰</div>
@@ -22,7 +21,7 @@
     </div>
     <div class="wrapper">
         <header>
-            <div class="logo" onclick="location.href='main.jsp'">SEED</div>
+            <div class="logo" onclick="location.href='{{ url_for('main_page') }}'">SEED</div>
             <h1>산불 확산 예측 상세 정보</h1>
         </header>
 
@@ -106,7 +105,7 @@
 
     <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e474c3379b43247007872a8baf1b48ce"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="js/chart.js"></script>
-    <script src="js/detail.js?v=<%= new java.util.Date().getTime() %>"></script>
+    <script src="{{ url_for('static', filename='js/chart.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/detail.js') }}"></script>
 </body>
 </html>

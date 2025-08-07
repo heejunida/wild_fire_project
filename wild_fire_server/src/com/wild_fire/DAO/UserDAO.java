@@ -27,21 +27,44 @@ public class UserDAO {
     }
 
     // 로그인 (ID/PW 체크)
-    public boolean login(String user_id, String user_pw) {
-        String sql = "SELECT user_pw FROM users WHERE user_id = ?";
+    public Long loginAndGetUid(String userId, String password) {
+        String sql = "SELECT u_id, user_pw FROM users WHERE user_id = ?";
+        
+        System.out.println("\n--- [LOGIN ATTEMPT] ---");
+        System.out.println("Trying to log in with user ID: " + userId);
+
+        // try-with-resources 구문을 사용하여 자원을 자동으로 해제합니다.
         try (Connection conn = DBUtil.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, user_id);
-            try (ResultSet rs = ps.executeQuery()) {
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, userId);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    String dbHashedPw = rs.getString("user_pw");
-                    return BCrypt.checkpw(user_pw, dbHashedPw);
+                    String dbHashedPassword = rs.getString("user_pw");
+                    System.out.println("User found. DB Hashed Password: " + dbHashedPassword);
+                    System.out.println("Hashed Password Length: " + dbHashedPassword.length());
+
+                    boolean passwordMatch = BCrypt.checkpw(password, dbHashedPassword);
+                    System.out.println("Password match result (BCrypt.checkpw): " + passwordMatch);
+                    
+                    if (passwordMatch) {
+                        System.out.println("Login SUCCESS. Returning u_id.");
+                        System.out.println("-------------------------\n");
+                        return rs.getLong("u_id");
+                    }
+                } else {
+                    System.out.println("User NOT FOUND in database.");
                 }
             }
         } catch (Exception e) {
+            System.err.println("An unexpected error occurred during login process.");
             e.printStackTrace();
         }
-        return false;
+        
+        System.out.println("Login FAILED.");
+        System.out.println("-------------------------\n");
+        return null;
     }
 
     public UserDTO findUserById(String userId) {
@@ -153,45 +176,5 @@ public class UserDAO {
         }
 
         return uid;
-    }
-
-    public Long loginAndGetUid(String userId, String password) {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-        Long uId = null;
-
-        try {
-            conn = com.wild_fire.util.DBUtil.getConnection();
-
-            String sql = "SELECT u_id, user_pw FROM users WHERE user_id = ?";
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, userId);
-            rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                String dbPw = rs.getString("user_pw");
-                if (BCrypt.checkpw(password, dbPw)) {
-                    // 로그인 성공 시 u_id 반환
-                    uId = rs.getLong("u_id");
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (rs != null) rs.close();
-            } catch (Exception e) {
-            }
-            try {
-                if (pstmt != null) pstmt.close();
-            } catch (Exception e) {
-            }
-            try {
-                if (conn != null) conn.close();
-            } catch (Exception e) {
-            }
-        }
-        return uId; // 성공 시 u_id, 실패 시 null
     }
 }

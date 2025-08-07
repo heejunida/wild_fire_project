@@ -90,61 +90,54 @@ function setupMapEventListeners(map) {
 
         abortController = new AbortController();
         const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        currentPredictionData = { requestId };
-
+        
         try {
             const now = new Date();
             now.setDate(now.getDate() - 4);
             const fireDate = now.toISOString().slice(0, 10);
             const fireTime = now.toTimeString().slice(0, 5);
 
-            console.log(`[DEBUG] Sending to server -> Lat: ${latitude}, Lng: ${longitude}`);
+            console.log(`[DEBUG] Sending POST request to /fire-predict`);
 
-            const response = await fetch(`/fire-predict?lat=${latitude}&lng=${longitude}&fireDate=${fireDate}&fireTime=${fireTime}&requestId=${requestId}&userId=${window.loginUserId}`, { signal: abortController.signal });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const response = await fetch(`/fire-predict`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
+                },
+                body: new URLSearchParams({
+                    'lat': latitude,
+                    'lng': longitude,
+                    'fireDate': fireDate,
+                    'fireTime': fireTime,
+                    'requestId': requestId
+                }),
+                signal: abortController.signal 
+            });
             
-            await response.json();
-            pollPredictionResult(requestId, stableLatLng);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server error: ${response.status} - ${errorText}`);
+            }
+            
+            const prediction = await response.json();
+
+            if (prediction.status === "success") {
+                currentPredictionData = { ...prediction, requestId };
+                displayFullPrediction(map, stableLatLng, prediction);
+            } else {
+                throw new Error(prediction.message || "Prediction failed on the server.");
+            }
+
         } catch (error) {
-            if (error.name !== 'AbortError') console.error("Error fetching fire prediction:", error);
+            if (error.name !== 'AbortError') {
+                console.error("Error during fire prediction:", error);
+                alert(`예측 중 오류가 발생했습니다: ${error.message}`);
+            }
             resetMapAndUI();
         }
     });
 
-    function pollPredictionResult(requestId, latlng, tryCount = 0) {
-        if (abortController?.signal.aborted) return;
-        if (pollingTimerId) clearTimeout(pollingTimerId);
-
-        fetch(`/fire-predict-result?requestId=${requestId}`)
-            .then(res => res.json())
-            .then(prediction => {
-                if (abortController?.signal.aborted) return;
-
-                if (prediction.status === "processing") {
-                    if (prediction.message && prediction.message !== lastStatusMessage) {
-                        lastStatusMessage = prediction.message;
-                        const loadingText = document.querySelector("#loadingOverlay p");
-                        if (loadingText) loadingText.textContent = lastStatusMessage;
-                    }
-                    pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
-                } else if (prediction.status === "success") {
-                    currentPredictionData = { ...prediction, requestId };
-                    displayFullPrediction(map, latlng, prediction);
-                } else {
-                    console.error("Server-side prediction error:", prediction.error);
-                    resetMapAndUI();
-                }
-            })
-            .catch(err => {
-                if (abortController?.signal.aborted) return;
-                if (tryCount < 40) {
-                    pollingTimerId = setTimeout(() => pollPredictionResult(requestId, latlng, tryCount + 1), 500);
-                } else {
-                    resetMapAndUI();
-                }
-            });
-    }
-
+    // Polling logic is no longer needed with the new API architecture.
     // Button event listeners have been moved to DOMContentLoaded
 }
 

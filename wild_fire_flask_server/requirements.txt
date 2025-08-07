@@ -1,0 +1,14 @@
+Flask
+oracledb
+bcrypt
+python-dotenv
+Flask-Session
+pandas
+joblib
+Flask-SQLAlchemy
+requests
+earthengine-api
+geemap
+scipy
+xgboost
+scikit-learn

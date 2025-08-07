@@ -1,0 +1,627 @@
+:root {
+  --bg-main:      #fefcf8;
+  --bg-section:   #f5efe7;
+  --bg-highlight: #ede0d4;
+  --bg-header:    #6b4226;
+  --bg-footer:    #4e342e;
+
+  --text-main:    #3e2c23;
+  --text-light:   #fdfaf6;
+
+  --accent-1:     #d6bfa8;
+  --accent-2:     #c9a27e;
+  --accent-3:     #ffb84d;
+}
+
+@font-face {
+  font-family: 'Paperlogy-8ExtraBold';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-8ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+}
+
+
+* {
+  font-family: 'Paperlogy-8ExtraBold', sans-serif;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg-main);
+  font-family: 'Noto Sans KR', sans-serif;
+  color: var(--text-main);
+  padding-top: 100px;
+  overflow-x: hidden;
+  margin: 0;
+  min-height: 100vh;
+}
+
+main {
+  text-align: center;
+  padding-top: 0;
+  flex: 1;
+}
+
+.wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.chart-container h3{
+  margin-bottom: 20px;
+  padding: 20px;
+  font-size: 25px;
+}
+
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 999;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background-color: var(--bg-main);
+  color: var(--text-light);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: top 0.4s ease-in-out;
+}
+header.hide {
+  top: -100px;
+}
+
+
+header h1 {
+  font-size: 24px;
+  font-weight: bold;
+  flex: 1;
+  margin-left: 24px;
+  color: var(--text-main);
+}
+
+.logo {
+  font-size: 36px;
+  font-weight: bold;
+  cursor: pointer;
+  color: var(--bg-header);
+}
+
+.search-wrap {
+  display: flex;
+  flex-direction: row;
+  padding: 0 40px;
+  gap: 20px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+/* 왼쪽: 선택 영역 + 지도 */
+.search-left {
+  width: 50%;
+  align-items: center;
+}
+
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.search-bar label {
+  font-weight: bold;
+  font-size: 25px;
+  margin-right: 10px;
+}
+
+.search-bar select,
+.search-bar button {
+  font-weight: normal;
+  padding: 10px 14px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.prediction-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.map-container {
+  background: white;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+.map-container h3{
+  padding: 20px;
+  font-size: 25px;
+}
+
+#map {
+  width: 100%;
+  height: 550px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background-color: #f9f9f9;
+  cursor: pointer;
+}
+
+/* 오른쪽: 선형 차트 */
+.chart-area {
+  width: 50%;
+}
+
+.chart-container {
+  background: white;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  height: 800px; /* Let height be determined by content */
+}
+#chartContainer {
+  position: relative;
+  height: 400px; /* 필요에 따라 조절 */
+  width: 100%;
+  overflow: visible;
+}
+
+#distanceChart {
+  height: 80% !important;
+  width: 100% !important;
+}
+
+/* 하단: 비교용 차트 */
+.compare-area {
+  background: white;
+  padding: 24px 40px;
+  margin: 20px 40px;
+  border-radius: 16px;
+  height: 900px;
+
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+.compare-area h3{
+  padding: 20px 20px 10px 20px;
+  font-size: 25px;
+}
+
+.compare-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.blank{
+  margin: 60px;
+}
+
+.compare-tags .tag {
+  background: #6A9E7C;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.compare-tags .tag .remove {
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+/* 반응형 */
+@media screen and (max-width: 960px) {
+  .search-wrap {
+    flex-direction: column;
+  }
+
+  .search-left,
+  .chart-area {
+    width: 100%;
+  }
+
+  header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  header h1 {
+    margin: 8px 0 0 0;
+    font-size: 20px;
+  }
+  .logo {
+    margin-bottom: 8px;
+  }
+
+  .compare-area {
+    margin: 20px;
+    padding: 20px;
+  }
+}
+.selected-regions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.region-tag {
+  display: flex;
+  background-color: #fff;
+  border: 1.5px solid #ccc;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 20px;
+  color: #333;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+}
+
+.region-tag:hover {
+  background-color: #f9f9f9;
+}
+
+.region-tag .region-name {
+  margin-right: 8px;
+}
+
+.region-tag .remove-btn {
+  cursor: pointer;
+  font-weight: bold;
+  color: #888;
+}
+
+/* 햄버거 버튼 */
+#hamburgerBtn {
+  position: fixed;
+  top: 15px;
+  right: 20px;
+  font-size: 26px;
+  color: var(--bg-header);
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 10000;
+}
+
+#sideMenu.active + #hamburgerBtn {
+  color: white;
+}
+
+/* 사이드 메뉴 전체 */
+#sideMenu {
+  position: fixed;
+  top: 0;
+  right: -260px; /* 숨겨진 상태 */
+  width: 240px;
+  height: 100%;
+  background-color: var(--bg-header);
+  color: white;
+  padding: 40px 20px;
+  transition: right 0.3s ease;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+}
+
+#hamburgerBtn.active {
+  color: white;
+}
+
+/* 메뉴 열렸을 때 */
+#sideMenu.active {
+  right: 0;
+}
+
+/* 닫기 버튼 */
+#closeMenu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 18px;
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.side-menu ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 50px;
+}
+
+.side-menu li {
+  margin: 20px 0;
+}
+
+.side-menu a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+}
+
+.side-menu a:hover {
+  text-decoration: underline;
+}
+
+/* 전체 화면 이동 효과 제거 (이제 안 씀) */
+body.shifted {
+  transform: none;
+}
+
+.site-footer {
+  background-color: var(--bg-section);
+  color: var(--bg-footer);
+  padding: 30px 20px;
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 0;
+  margin-top: auto;
+}
+
+.footer-content p {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.footer-content .copyright {
+  margin-top: 20px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+/* --- NEW: Styles for the custom info overlay on the map --- */
+.info-overlay {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px 15px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    color: #333;
+    min-width: 240px;
+}
+.info-overlay h4 {
+    margin: 0 0 8px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+    font-size: 16px;
+    color: #000;
+    font-weight: bold;
+}
+.info-overlay ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.info-overlay li {
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+.info-overlay li strong {
+    display: inline-block;
+    width: 110px;
+    color: #555;
+    font-weight: 500;
+}
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex; /* This is crucial for it to be visible */
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.2em;
+  z-index: 1000; /* Ensure it's on top of other content */
+  display: none; /* Hidden by default */
+}
+
+.loading-spinner {
+  border: 8px solid #f3f3f3; /* Light grey */
+  border-top: 8px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Wind Arrow Overlay Styles */
+.wind-arrow-overlay {
+  position: relative;
+  width: 30px; /* Match SVG width */
+  height: 30px; /* Match SVG height */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Optional: Add a background or border for visibility if needed */
+  /* background-color: rgba(255, 255, 255, 0.7); */
+  /* border-radius: 50%; */
+}
+
+.wind-arrow-overlay svg {
+  display: block; /* Remove extra space below SVG */
+}
+
+/* Cancel Button for Loading Overlay */
+.cancel-button {
+  font-weight: normal;
+  background-color: #f44336; /* Red */
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  margin-top: 20px;
+  transition: background-color 0.3s ease;
+}
+
+.cancel-button:hover {
+  background-color: #d32f2f; /* Darker red on hover */
+}
+
+/* --- FIX: Updated Styles for Model Confidence Section --- */
+.confidence-section {
+    background: white;
+    padding: 24px 40px;
+    margin: 20px 40px;
+    border-radius: 16px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+
+.confidence-section h3 {
+    padding: 20px;
+    font-size: 25px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.metrics-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    text-align: left; /* Align text to the left for readability */
+}
+
+.metric-item {
+    background-color: var(--bg-section);
+    padding: 20px;
+    border-radius: 12px;
+    border-left: 5px solid var(--accent-2); /* Add a highlight border */
+}
+
+.metric-item h4 {
+    font-size: 18px;
+    color: var(--bg-header);
+    margin-bottom: 15px;
+}
+
+.metric-item p {
+    font-size: 16px;
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.metric-item strong {
+    color: var(--text-main);
+}
+
+.metric-item small {
+    font-size: 13px;
+    color: #777;
+    display: block; /* Ensure it takes its own line */
+    margin-top: 15px;
+}
+
+.confidence-range {
+    font-size: 0.9em;
+    color: #555;
+    font-style: italic;
+}
+
+/* --- NEW: Styles for FWI Risk Level Badge --- */
+.risk-level {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 12px;
+    color: white;
+    margin-left: 8px;
+    vertical-align: middle;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+}
+
+.risk-level.low {
+    background-color: #FFC107; /* Yellow/Amber */
+    color: #333; /* Darker text for yellow background */
+    text-shadow: none;
+}
+
+.risk-level.moderate {
+    background-color: #FF9800; /* Orange */
+}
+
+.risk-level.high {
+    background-color: #F44336; /* Red */
+}
+
+.risk-level.extreme {
+    background-color: #D32F2F; /* Darker Red */
+}
+
+/* --- NEW: Styles for R² Progress Bar --- */
+.metric-detail {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.metric-detail span {
+    font-weight: 500;
+}
+
+.metric-value {
+    font-size: 1.1em;
+}
+
+.progress-bar-container {
+    width: 100px;
+    height: 20px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--accent-2);
+    border-radius: 10px;
+}
+
+.progress-bar-container span {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    line-height: 20px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+}

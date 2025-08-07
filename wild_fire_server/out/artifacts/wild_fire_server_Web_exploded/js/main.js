@@ -150,18 +150,27 @@ async function handleLogin() {
   const id = document.getElementById("loginId").value;
   const pw = document.getElementById("loginPw").value;
 
-  const res = await fetch("/login", {
-    method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: `user_id=${encodeURIComponent(id)}&user_pw=${encodeURIComponent(pw)}`
-  });
-  const data = await res.json();
-  if (data.result === "success") {
-    alert("로그인 성공!");
-    closeModal("loginModal");
-    location.reload();
-  } else {
-    alert("아이디 또는 비밀번호가 일치하지 않습니다.");
+  try {
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      body: `user_id=${encodeURIComponent(id)}&user_pw=${encodeURIComponent(pw)}`
+    });
+    
+    const data = await res.json();
+
+    // FIX: Check for 'status' key instead of 'result'
+    if (data.status === "success") {
+      // alert("로그인 성공!"); // 성공 시에는 굳이 alert를 띄우지 않고 바로 새로고침하는 것이 더 나은 UX입니다.
+      closeModal("loginModal");
+      location.reload();
+    } else {
+      // 서버가 보낸 실패 메시지를 그대로 사용
+      alert(data.message || "아이디 또는 비밀번호가 일치하지 않습니다.");
+    }
+  } catch (error) {
+    console.error("Login request failed:", error);
+    alert("로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
   }
 }
 const userMenuBtn = document.getElementById("userMenuBtn");

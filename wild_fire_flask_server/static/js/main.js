@@ -133,8 +133,8 @@ async function handleSignup() {
 
   const res = await fetch("/signup", {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: `user_name=${encodeURIComponent(name)}&user_id=${encodeURIComponent(id)}&user_pw=${encodeURIComponent(pw)}`
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_name: name, user_id: id, user_pw: pw})
   });
   const data = await res.json();
   if (data.result === "success") {
@@ -153,19 +153,16 @@ async function handleLogin() {
   try {
     const res = await fetch("/login", {
       method: "POST",
-      headers: {"Content-Type": "application/x-www-form-urlencoded"},
-      body: `user_id=${encodeURIComponent(id)}&user_pw=${encodeURIComponent(pw)}`
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({user_id: id, user_pw: pw})
     });
     
     const data = await res.json();
 
-    // FIX: Check for 'status' key instead of 'result'
     if (data.status === "success") {
-      // alert("로그인 성공!"); // 성공 시에는 굳이 alert를 띄우지 않고 바로 새로고침하는 것이 더 나은 UX입니다.
       closeModal("loginModal");
       location.reload();
     } else {
-      // 서버가 보낸 실패 메시지를 그대로 사용
       alert(data.message || "아이디 또는 비밀번호가 일치하지 않습니다.");
     }
   } catch (error) {
@@ -191,7 +188,6 @@ if (mainDropdownBtn && mainDropdownContent) {
   mainDropdownBtn.onclick = function(e) {
     e.stopPropagation();
     const isOpen = mainDropdownContent.style.display === "block";
-    // 모든 드롭다운 닫기 (유저 메뉴와 충돌 방지)
     document.querySelectorAll(".dropdown-content").forEach(el => el.style.display = "none");
     mainDropdownContent.style.display = isOpen ? "none" : "block";
   };
@@ -199,7 +195,6 @@ if (mainDropdownBtn && mainDropdownContent) {
   mainDropdownContent.onclick = function(e) {
     e.stopPropagation();
   };
-  // 바깥 클릭시 닫기 (유저 메뉴도 같이 닫음)
   document.addEventListener("click", function() {
     mainDropdownContent.style.display = "none";
   });
@@ -214,11 +209,10 @@ async function handleFindId() {
     return;
   }
 
-  // 서버로 이름만 보내서 아이디 찾기 요청
   const res = await fetch("/findId", {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: `user_name=${encodeURIComponent(name)}`
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_name: name})
   });
   const data = await res.json();
 
@@ -241,23 +235,20 @@ async function handleFindPw() {
 
   const res = await fetch("/findPw", {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: `user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(name)}`
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_id: userId, user_name: name})
   });
   const data = await res.json();
 
   if (data.result === "success") {
-    // 성공시: 비밀번호 재설정 폼(새 비번2개 입력)으로 전환
-    PwResetForm(userId); // userId를 다음 스텝에 넘겨야 함!
+    PwResetForm(userId);
   } else {
     resultBox.innerText = "일치하는 회원 정보가 없습니다.";
   }
 }
 function PwResetForm(userId) {
-  // 비밀번호 재설정 전용 모달/폼 열고,
-  // userId는 숨겨진 input이나 JS 변수에 저장
-  document.getElementById("pwResetUserId").value = userId; // hidden input 사용 예시
-  switchForm('pwReset'); // 전용 폼으로 전환
+  document.getElementById("pwResetUserId").value = userId;
+  switchForm('pwReset');
 }
 
 async function handleLogout() {
@@ -266,15 +257,13 @@ async function handleLogout() {
 
   if (data.result === "logout") {
     alert("로그아웃 되었습니다!");
-    window.location.href = "/main.jsp";
-    location.reload();
+    window.location.href = "/";
   } else {
     alert("로그아웃에 실패했습니다. 다시 시도해 주세요.");
   }
 }
 
 async function handleModalPwChange() {
-  console.log("userId:", getLoginUserId());
   const oldPw = document.getElementById("modalOldPw").value;
   const newPw = document.getElementById("modalNewPw").value;
   const newPw2 = document.getElementById("modalNewPw2").value;
@@ -294,20 +283,18 @@ async function handleModalPwChange() {
     return;
   }
 
-  // 로그인 유저 id 얻기
   const userId = getLoginUserId();
 
-  // 서버에 비번 변경 요청
   const res = await fetch("/resetPw", {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: `user_id=${encodeURIComponent(userId)}&old_pw=${encodeURIComponent(oldPw)}&new_pw=${encodeURIComponent(newPw)}`
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_id: userId, old_pw: oldPw, new_pw: newPw})
   });
   const data = await res.json();
   if (data.result === "success") {
     alert("비밀번호가 변경되었습니다. 다시 로그인 해주세요.");
     closeModal('pwModal');
-    window.location.href = "/main.jsp";
+    window.location.href = "/";
   } else if (data.result === "wrongpw") {
     msgBox.innerText = "현재 비밀번호가 올바르지 않습니다.";
   } else {
@@ -330,11 +317,10 @@ async function handlePwResetWithoutOldPw() {
     return;
   }
 
-  // 서버로 비밀번호 재설정 요청
   const res = await fetch("/resetPwWithoutOld", {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: `user_id=${encodeURIComponent(userId)}&new_pw=${encodeURIComponent(pw1)}`
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_id: userId, new_pw: pw1})
   });
   const data = await res.json();
 
@@ -346,7 +332,6 @@ async function handlePwResetWithoutOldPw() {
   }
 }
 
-// 로그인한 user_id를 얻는 함수 (예시, 실제 상황에 맞게 수정)
 function getLoginUserId() {
   const el = document.getElementById("loginUserId");
   if (el) return el.innerText.trim();

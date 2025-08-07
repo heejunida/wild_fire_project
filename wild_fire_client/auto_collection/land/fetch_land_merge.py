@@ -72,7 +72,7 @@ def get_land_cover(lat, lng):
     """Fetches the land cover type."""
     try:
         point = ee.Geometry.Point(float(lng), float(lat))
-        land_cover_collection = ee.ImageCollection('MODIS/006/MCD12Q1').select('LC_Type1')
+        land_cover_collection = ee.ImageCollection('MODIS/016/MCD12Q1').select('LC_Type1')
         latest_land_cover = land_cover_collection.sort('system:time_start', False).first()
         land_cover_info = latest_land_cover.sample(point, scale=1).first().getInfo()
         
